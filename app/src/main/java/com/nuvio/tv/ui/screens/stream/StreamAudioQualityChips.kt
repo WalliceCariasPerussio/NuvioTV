@@ -106,18 +106,23 @@ internal fun rememberStreamAudioQualityChipState(
     val languageNames = languageKeys.map(::languageName)
     val qualityNames = qualityCounts.map { (bucket, count) -> qualityName(bucket, count) }
 
-    fun bestQuality(language: String): String = traits
-        .filter { streamTraits ->
-            when (language) {
-                StreamFilterAll -> true
-                StreamLanguageUnknown -> streamTraits.audioLanguages.isEmpty()
-                else -> language in streamTraits.audioLanguages
+    // The best quality within the automatic cap, else the closest one above it.
+    val maxQuality = playerSettings?.streamAutoPlayMaxQuality?.bucket
+    fun bestQuality(language: String): String {
+        val qualities = traits
+            .filter { streamTraits ->
+                when (language) {
+                    StreamFilterAll -> true
+                    StreamLanguageUnknown -> streamTraits.audioLanguages.isEmpty()
+                    else -> language in streamTraits.audioLanguages
+                }
             }
-        }
-        .map { it.quality }
-        .filter { it != StreamQualityBucket.OTHER }
-        .minByOrNull { it.ordinal }
-        ?.name ?: StreamFilterAll
+            .map { it.quality }
+            .filter { it != StreamQualityBucket.OTHER }
+        val best = qualities.filter { it.isWithin(maxQuality) }.minByOrNull { it.ordinal }
+            ?: qualities.maxByOrNull { it.ordinal }
+        return best?.name ?: StreamFilterAll
+    }
 
     val defaultKey = run {
         val language = when {

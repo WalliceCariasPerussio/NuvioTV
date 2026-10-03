@@ -1665,6 +1665,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                         // Fatal error: stop any next-episode auto-play that may have been
                         // armed by a short placeholder ENDED or residual post-play state.
                         cancelNextEpisodeAutoPlayOnFatalError()
+                        if (tryAutoSourceFailover(detailedError)) return // fork
                         val canSwitchToMpvOnFatal = currentInternalPlayerEngine != InternalPlayerEngine.MVP_PLAYER &&
                             (error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
                              error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||

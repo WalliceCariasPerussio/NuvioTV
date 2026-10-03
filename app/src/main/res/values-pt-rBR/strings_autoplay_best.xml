@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="autoplay_mode_best_audio">Melhor qualidade no meu idioma</string>
+    <string name="autoplay_mode_best_audio_desc">Toca a melhor fonte com áudio no seu idioma preferido (depois no secundário), até a qualidade máxima. Se não houver, mostra as fontes.</string>
+    <string name="stream_auto_play_best_audio_short">Melhor no meu idioma</string>
+    <string name="autoplay_max_quality">Qualidade máxima automática</string>
+    <string name="autoplay_max_quality_sub">Maior qualidade escolhida sem perguntar. As maiores continuam no painel Qualidade.</string>
+    <string name="autoplay_max_quality_no_limit">Sem limite</string>
+    <string name="autoplay_max_quality_4k">4K</string>
+    <string name="autoplay_max_quality_1080">1080p</string>
+    <string name="autoplay_max_quality_720">720p</string>
+</resources>

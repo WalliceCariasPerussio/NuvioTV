@@ -87,8 +87,17 @@ internal fun PlaybackStreamSelectionSection(
             StreamAutoPlayMode.MANUAL -> stringResource(R.string.autoplay_mode_manual)
             StreamAutoPlayMode.FIRST_STREAM -> stringResource(R.string.autoplay_mode_first)
             StreamAutoPlayMode.REGEX_MATCH -> stringResource(R.string.autoplay_mode_regex)
+            StreamAutoPlayMode.BEST_PREFERRED_AUDIO -> stringResource(R.string.autoplay_mode_best_audio)
         },
         onClick = { onOpenDialog(PlaybackDialog.STREAM_AUTO_PLAY_MODE) }
+    )
+
+    // Fork: cap for every automatic choice (autoplay, the player's audio/quality panels, failover).
+    SettingsActionRow(
+        title = stringResource(R.string.autoplay_max_quality),
+        subtitle = stringResource(R.string.autoplay_max_quality_sub),
+        value = maxQualityLabel(settings.streamAutoPlayMaxQuality),
+        onClick = { onOpenDialog(PlaybackDialog.STREAM_AUTO_PLAY_MAX_QUALITY) }
     )
 
     if (settings.streamAutoPlayMode == StreamAutoPlayMode.REGEX_MATCH) {
@@ -153,7 +162,8 @@ internal fun PlaybackStreamSelectionSection(
         onValueChange = { seconds -> onUpdate { setStreamAutoPlayTimeoutSeconds(seconds) } }
     )
 
-    SettingsToggleRow(
+    // Fork: the player always preloads the next episode now, so this toggle is not shown.
+    if (false) SettingsToggleRow(
         title = stringResource(R.string.autoplay_preload_next_episode),
         subtitle = stringResource(R.string.autoplay_preload_next_episode_sub),
         checked = settings.preloadNextEpisodeSources,
@@ -327,6 +337,20 @@ internal fun AutoPlaySettingsDialogs(
             },
             onDismiss = onDismiss
         )
+        PlaybackDialog.STREAM_AUTO_PLAY_MAX_QUALITY -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.autoplay_max_quality),
+            options = com.nuvio.tv.data.local.StreamAutoPlayMaxQuality.entries.map { quality ->
+                SettingsPickerOption(quality, maxQualityLabel(quality))
+            },
+            selectedValue = settings.streamAutoPlayMaxQuality,
+            onOptionSelected = { quality ->
+                onUpdate { setStreamAutoPlayMaxQuality(quality) }
+                onDismiss()
+            },
+            onDismiss = onDismiss,
+            width = 420.dp,
+            maxHeight = 320.dp
+        )
         PlaybackDialog.STREAM_AUTO_PLAY_SOURCE -> StreamAutoPlaySourceDialog(
             selectedSource = settings.streamAutoPlaySource,
             onSourceSelected = { source ->
@@ -440,7 +464,8 @@ private fun StreamAutoPlayModeDialog(
     val options = listOf(
         SettingsPickerOption(StreamAutoPlayMode.MANUAL, stringResource(R.string.autoplay_mode_manual), stringResource(R.string.autoplay_mode_manual_desc)),
         SettingsPickerOption(StreamAutoPlayMode.FIRST_STREAM, stringResource(R.string.autoplay_mode_first), stringResource(R.string.autoplay_mode_first_desc)),
-        SettingsPickerOption(StreamAutoPlayMode.REGEX_MATCH, stringResource(R.string.autoplay_mode_regex), stringResource(R.string.autoplay_mode_regex_desc))
+        SettingsPickerOption(StreamAutoPlayMode.REGEX_MATCH, stringResource(R.string.autoplay_mode_regex), stringResource(R.string.autoplay_mode_regex_desc)),
+        SettingsPickerOption(StreamAutoPlayMode.BEST_PREFERRED_AUDIO, stringResource(R.string.autoplay_mode_best_audio), stringResource(R.string.autoplay_mode_best_audio_desc))
     )
 
     SettingsSingleChoiceDialog(
@@ -906,4 +931,12 @@ private fun StreamRegexDialog(
             }
         }
     }
+}
+
+@Composable
+private fun maxQualityLabel(quality: com.nuvio.tv.data.local.StreamAutoPlayMaxQuality): String = when (quality) {
+    com.nuvio.tv.data.local.StreamAutoPlayMaxQuality.NO_LIMIT -> stringResource(R.string.autoplay_max_quality_no_limit)
+    com.nuvio.tv.data.local.StreamAutoPlayMaxQuality.UHD_4K -> stringResource(R.string.autoplay_max_quality_4k)
+    com.nuvio.tv.data.local.StreamAutoPlayMaxQuality.FHD_1080 -> stringResource(R.string.autoplay_max_quality_1080)
+    com.nuvio.tv.data.local.StreamAutoPlayMaxQuality.HD_720 -> stringResource(R.string.autoplay_max_quality_720)
 }

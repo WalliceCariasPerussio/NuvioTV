@@ -2,7 +2,11 @@ package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.stream.StreamLanguageUnknown
+import com.nuvio.tv.ui.screens.stream.SourceRanking
 import com.nuvio.tv.ui.screens.stream.StreamQualityBucket
+import com.nuvio.tv.ui.screens.stream.bucket
+import com.nuvio.tv.ui.screens.stream.isWithin
+import com.nuvio.tv.ui.screens.stream.rankSourceStreams
 import com.nuvio.tv.ui.screens.stream.languageCounts
 import com.nuvio.tv.ui.screens.stream.languageKeysByCount
 import com.nuvio.tv.ui.screens.stream.matchingLanguageKey
@@ -65,7 +69,10 @@ internal fun PlayerUiState.currentAudioLanguage(): String? {
         ?: trackLanguage
 }
 
-internal fun PlayerUiState.buildSourceTrackOptions(preferredTargets: List<String>): SourceTrackOptions {
+internal fun PlayerUiState.buildSourceTrackOptions(
+    preferredTargets: List<String>,
+    maxQuality: StreamQualityBucket? = null,
+): SourceTrackOptions {
     val streams = sourceAllStreams
     val traits = streams.map { it.streamTraits() }
     val currentLanguage = currentAudioLanguage()
@@ -76,10 +83,12 @@ internal fun PlayerUiState.buildSourceTrackOptions(preferredTargets: List<String
     val preferredKeys = preferredTargets.mapNotNull { matchingLanguageKey(keysByCount, it) }.distinct()
     val orderedKeys = preferredKeys + keysByCount.filterNot { it in preferredKeys }
 
-    fun bestQuality(language: String): StreamQualityBucket? = traits
-        .filter { language in it.audioLanguages }
-        .map { it.quality }
-        .minByOrNull { it.ordinal }
+    // What picking the language would play: the best quality within the cap, else the closest above.
+    fun bestQuality(language: String): StreamQualityBucket? {
+        val qualities = traits.filter { language in it.audioLanguages }.map { it.quality }
+        return qualities.filter { it.isWithin(maxQuality) }.minByOrNull { it.ordinal }
+            ?: qualities.maxByOrNull { it.ordinal }
+    }
 
     val languages = orderedKeys.map { key ->
         SourceLanguageOption(
@@ -107,20 +116,27 @@ internal fun PlayerUiState.buildSourceTrackOptions(preferredTargets: List<String
     )
 }
 
-/** Best source for a language and/or quality: exact language first, then best quality, list order. */
-internal fun bestSourceStream(streams: List<Stream>, language: String?, quality: StreamQualityBucket?): Stream? {
-    val candidates = streams.mapNotNull { stream ->
-        val traits = stream.streamTraits()
-        if (quality != null && traits.quality != quality) return@mapNotNull null
-        val languageRank = when {
-            language == null -> 0
-            language in traits.audioLanguages -> 0
-            traits.audioLanguages.any { sameLanguage(it, language) } -> 1
-            else -> return@mapNotNull null
-        }
-        Triple(stream, languageRank, traits.quality.ordinal)
-    }
-    return candidates.sortedWith(compareBy({ it.second }, { it.third })).firstOrNull()?.first
+/**
+ * Best source for a language and/or quality, by the shared ranking (StreamSourceRanking.kt): a
+ * language pick stays within the quality cap when it can; a quality picked by hand has no cap. Ties
+ * prefer the release group and the addon playing now.
+ */
+internal fun PlayerRuntimeController.bestSourceStream(
+    streams: List<Stream>,
+    language: String?,
+    quality: StreamQualityBucket?,
+): Stream? {
+    val scoped = if (quality == null) streams else streams.filter { it.streamTraits().quality == quality }
+    return rankSourceStreams(
+        scoped,
+        SourceRanking(
+            language = language,
+            maxQuality = if (quality == null) latestPlayerSettings?.streamAutoPlayMaxQuality?.bucket else null,
+            strictCap = false,
+            preferredBingeGroup = currentStreamBingeGroup,
+            preferredAddon = _uiState.value.currentStreamAddonName,
+        ),
+    ).firstOrNull()
 }
 
 /** Opens the audio overlay slot as the audio panel or the quality panel, with the source list loaded. */

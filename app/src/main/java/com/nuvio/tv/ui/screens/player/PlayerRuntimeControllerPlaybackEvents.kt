@@ -1580,6 +1580,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             filterEpisodeStreamsByAddon(event.addonName)
         }
         is PlayerEvent.OnEpisodeStreamSelected -> {
+            markManualSourcePick(event.stream) // fork
             switchToEpisodeStream(event.stream)
         }
         PlayerEvent.OnShowSourcesPanel -> {
@@ -1595,6 +1596,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             filterSourceStreamsByAddon(event.addonName)
         }
         is PlayerEvent.OnSourceStreamSelected -> {
+            markManualSourcePick(event.stream) // fork
             switchToSourceStream(event.stream)
         }
         PlayerEvent.OnDismissTransientOverlay -> {

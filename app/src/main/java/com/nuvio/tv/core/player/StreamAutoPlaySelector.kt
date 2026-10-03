@@ -6,6 +6,8 @@ import com.nuvio.tv.data.local.StreamAutoPlaySource
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamDebridCacheState
+import com.nuvio.tv.ui.screens.stream.StreamQualityBucket
+import com.nuvio.tv.ui.screens.stream.selectBestInPreferredLanguage
 
 object StreamAutoPlaySelector {
     fun orderAddonStreams(
@@ -60,7 +62,11 @@ object StreamAutoPlaySelector {
         selectedPlugins: Set<String>,
         preferredBingeGroup: String? = null,
         preferBingeGroupInSelection: Boolean = false,
-        bingeGroupOnly: Boolean = false
+        bingeGroupOnly: Boolean = false,
+        // Fork: for BEST_PREFERRED_AUDIO (primary, then secondary language; and the quality cap).
+        preferredLanguages: List<String> = emptyList(),
+        maxQuality: StreamQualityBucket? = null,
+        preferredAddon: String? = null
     ): Stream? {
         if (streams.isEmpty()) return null
 
@@ -106,6 +112,13 @@ object StreamAutoPlaySelector {
         return when (mode) {
             StreamAutoPlayMode.MANUAL -> null
             StreamAutoPlayMode.FIRST_STREAM -> candidateStreams.firstOrNull { isPlayable(it) }
+            StreamAutoPlayMode.BEST_PREFERRED_AUDIO -> selectBestInPreferredLanguage(
+                streams = candidateStreams.filter { isPlayable(it) },
+                preferredLanguages = preferredLanguages,
+                maxQuality = maxQuality,
+                preferredBingeGroup = targetBingeGroup.ifEmpty { null },
+                preferredAddon = preferredAddon,
+            )
             StreamAutoPlayMode.REGEX_MATCH -> {
                 val pattern = regexPattern.trim()
  

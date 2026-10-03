@@ -1,5 +1,8 @@
 package com.nuvio.tv.core.debrid
 
+import com.nuvio.tv.ui.screens.stream.autoPlayAudioLanguages
+import com.nuvio.tv.ui.screens.stream.bucket
+
 import android.util.Log
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.data.local.DebridSettingsDataStore
@@ -93,7 +96,9 @@ class DirectDebridStreamPreparer @Inject constructor(
             source = playerSettings.streamAutoPlaySource,
             installedAddonNames = installedAddonNames,
             selectedAddons = playerSettings.streamAutoPlaySelectedAddons,
-            selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins
+            selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins,
+            preferredLanguages = playerSettings.autoPlayAudioLanguages(),
+            maxQuality = playerSettings.streamAutoPlayMaxQuality.bucket
         )
         if (autoPlaySelection?.let { it.isDirectDebrid() || it.isCachedLocalDebridTorrent() } == true) {
             candidates.firstOrNull { it.preparationKey() == autoPlaySelection.preparationKey() }

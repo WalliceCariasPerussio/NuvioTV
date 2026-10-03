@@ -468,6 +468,10 @@ class PlaybackSettingsViewModel @Inject constructor(
         playerSettingsDataStore.setStreamAutoPlayMode(mode)
     }
 
+    suspend fun setStreamAutoPlayMaxQuality(maxQuality: com.nuvio.tv.data.local.StreamAutoPlayMaxQuality) {
+        playerSettingsDataStore.setStreamAutoPlayMaxQuality(maxQuality)
+    }
+
     suspend fun setStreamAutoPlaySource(source: StreamAutoPlaySource) {
         playerSettingsDataStore.setStreamAutoPlaySource(source)
     }

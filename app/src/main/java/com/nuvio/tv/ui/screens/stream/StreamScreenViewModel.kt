@@ -82,6 +82,8 @@ class StreamScreenViewModel @Inject constructor(
     private val streamBadgePresentation: StreamBadgePresentation,
     streamBadgeSettingsDataStore: StreamBadgeSettingsDataStore,
     private val bingeGroupCacheDataStore: BingeGroupCacheDataStore,
+    // Fork: the audio language chosen for this title leads the "best in my language" autoplay.
+    private val trackPreferenceDataStore: com.nuvio.tv.data.local.TrackPreferenceDataStore,
     private val torrentSettings: TorrentSettings,
     private val watchProgressRepository: WatchProgressRepository,
     private val trackingScrobbleCoordinator: TrackingScrobbleCoordinator,
@@ -476,6 +478,13 @@ class StreamScreenViewModel @Inject constructor(
                 playerSettings.streamAutoPlayReuseBingeGroup) {
                 contentId?.let { bingeGroupCacheDataStore.get(it) }
             } else null
+            // Fork: language and quality cap for the BEST_PREFERRED_AUDIO mode. Like Netflix, the
+            // audio language last chosen for this title comes before the preferred ones.
+            val titleAudioLanguage = contentId
+                ?.let { runCatching { trackPreferenceDataStore.load(it) }.getOrNull()?.audioLanguage }
+                ?.let(::streamLanguageCode)
+            val autoPlayLanguages = (listOfNotNull(titleAudioLanguage) + playerSettings.autoPlayAudioLanguages()).distinct()
+            val autoPlayMaxQuality = playerSettings.streamAutoPlayMaxQuality.bucket
 
             fun applySuccess(addonStreamGroups: List<AddonStreams>, isAllLoaded: Boolean) {
                 val orderedAddonStreams = StreamAutoPlaySelector.orderAddonStreams(
@@ -525,7 +534,9 @@ class StreamScreenViewModel @Inject constructor(
                         selectedAddons = playerSettings.streamAutoPlaySelectedAddons,
                         selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins,
                         preferredBingeGroup = persistedBingeGroup,
-                        preferBingeGroupInSelection = persistedBingeGroup != null
+                        preferBingeGroupInSelection = persistedBingeGroup != null,
+                        preferredLanguages = autoPlayLanguages,
+                        maxQuality = autoPlayMaxQuality
                     )
                 }
                 if (selectedAutoPlayStream != null) {
@@ -733,6 +744,38 @@ class StreamScreenViewModel @Inject constructor(
                                     updateUiStateIfChanged {
                                         it.copy(
                                             autoPlayStream = earlyMatch,
+                                            showDirectAutoPlayOverlay = true
+                                        )
+                                    }
+                                }
+                            } else if (
+                                directFlowActive &&
+                                playerSettings.streamAutoPlayMode == StreamAutoPlayMode.BEST_PREFERRED_AUDIO
+                            ) {
+                                // Fork: start as soon as a source can't be beaten by the ones still
+                                // loading (preferred language, at the quality cap, ready link).
+                                val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(
+                                    result.data, installedAddonOrder
+                                ).flatMap { it.streams }
+                                val bestSoFar = StreamAutoPlaySelector.selectAutoPlayStream(
+                                    streams = orderedStreams,
+                                    mode = playerSettings.streamAutoPlayMode,
+                                    regexPattern = playerSettings.streamAutoPlayRegex,
+                                    source = playerSettings.streamAutoPlaySource,
+                                    installedAddonNames = installedAddonOrder.toSet(),
+                                    selectedAddons = playerSettings.streamAutoPlaySelectedAddons,
+                                    selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins,
+                                    preferredLanguages = autoPlayLanguages,
+                                    maxQuality = autoPlayMaxQuality
+                                )
+                                if (bestSoFar != null &&
+                                    isUnbeatableChoice(bestSoFar, autoPlayLanguages.firstOrNull(), autoPlayMaxQuality)
+                                ) {
+                                    resolvedAutoPlayTarget = true
+                                    autoSelectTriggered = true
+                                    updateUiStateIfChanged {
+                                        it.copy(
+                                            autoPlayStream = bestSoFar,
                                             showDirectAutoPlayOverlay = true
                                         )
                                     }

@@ -272,6 +272,7 @@ internal fun PlayerRuntimeController.handleMpvPlaybackError(
 
         finishLoadingDiagnostics("mpv_error")
         cancelNextEpisodeAutoPlayOnFatalError()
+        if (tryAutoSourceFailover(detailedError)) return // fork
         _uiState.update {
             it.copy(
                 error = detailedError,

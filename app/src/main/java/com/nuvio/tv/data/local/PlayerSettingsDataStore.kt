@@ -266,6 +266,7 @@ data class PlayerSettings(
     val streamAutoPlaySelectedAddons: Set<String> = emptySet(),
     val streamAutoPlaySelectedPlugins: Set<String> = emptySet(),
     val streamAutoPlayRegex: String = "",
+    val streamAutoPlayMaxQuality: StreamAutoPlayMaxQuality = StreamAutoPlayMaxQuality.FHD_1080,
     val postPlayRecommendationsEnabled: Boolean = true,
     val postPlayMovieThresholdPercent: Int = DEFAULT_POST_PLAY_MOVIE_THRESHOLD_PERCENT,
     val streamAutoPlayNextEpisodeEnabled: Boolean = false,
@@ -368,7 +369,14 @@ data class PlayerSettings(
 }
 
 enum class StreamAutoPlayMode {
-    MANUAL, FIRST_STREAM, REGEX_MATCH
+    MANUAL, FIRST_STREAM, REGEX_MATCH,
+    /** Fork: best quality (up to the cap) in the preferred audio language, then the secondary one. */
+    BEST_PREFERRED_AUDIO
+}
+
+/** Fork: highest quality an automatic source choice may pick (Netflix's "data usage per screen"). */
+enum class StreamAutoPlayMaxQuality {
+    NO_LIMIT, UHD_4K, FHD_1080, HD_720
 }
 
 enum class StreamAutoPlaySource {
@@ -529,6 +537,7 @@ class PlayerSettingsDataStore @Inject constructor(
     private val frameRateMatchingModeKey = stringPreferencesKey("frame_rate_matching_mode")
     private val resolutionMatchingEnabledKey = booleanPreferencesKey("resolution_matching_enabled")
     private val streamAutoPlayModeKey = stringPreferencesKey("stream_auto_play_mode")
+    private val streamAutoPlayMaxQualityKey = stringPreferencesKey("stream_auto_play_max_quality")
     private val streamAutoPlaySourceKey = stringPreferencesKey("stream_auto_play_source")
     private val streamAutoPlaySelectedAddonsKey = stringSetPreferencesKey("stream_auto_play_selected_addons")
     private val streamAutoPlaySelectedPluginsKey = stringSetPreferencesKey("stream_auto_play_selected_plugins")
@@ -923,6 +932,9 @@ class PlayerSettingsDataStore @Inject constructor(
                 streamAutoPlaySelectedAddons = prefs[streamAutoPlaySelectedAddonsKey] ?: emptySet(),
                 streamAutoPlaySelectedPlugins = prefs[streamAutoPlaySelectedPluginsKey] ?: emptySet(),
                 streamAutoPlayRegex = prefs[streamAutoPlayRegexKey] ?: "",
+                streamAutoPlayMaxQuality = prefs[streamAutoPlayMaxQualityKey]?.let {
+                    runCatching { StreamAutoPlayMaxQuality.valueOf(it) }.getOrNull()
+                } ?: StreamAutoPlayMaxQuality.FHD_1080,
                 postPlayRecommendationsEnabled = prefs[postPlayRecommendationsEnabledKey] ?: true,
                 postPlayMovieThresholdPercent = (prefs[postPlayMovieThresholdPercentKey]
                     ?: PlayerSettings.DEFAULT_POST_PLAY_MOVIE_THRESHOLD_PERCENT).coerceIn(
@@ -1266,6 +1278,12 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setStreamAutoPlayMode(mode: StreamAutoPlayMode) {
         store().edit { prefs ->
             prefs[streamAutoPlayModeKey] = mode.name
+        }
+    }
+
+    suspend fun setStreamAutoPlayMaxQuality(maxQuality: StreamAutoPlayMaxQuality) {
+        store().edit { prefs ->
+            prefs[streamAutoPlayMaxQualityKey] = maxQuality.name
         }
     }
 

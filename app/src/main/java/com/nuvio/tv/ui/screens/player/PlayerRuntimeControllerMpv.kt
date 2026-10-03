@@ -198,6 +198,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
             return@onFailure
         }
         cancelNextEpisodeAutoPlayOnFatalError()
+        if (tryAutoSourceFailover(detailedError)) return@onFailure // fork
         _uiState.update {
             it.copy(
                 error = detailedError,

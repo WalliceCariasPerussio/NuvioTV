@@ -523,6 +523,9 @@ class PlayerRuntimeController(
     internal var rememberedTrackPreference: TrackPreference? = null
     // Fork: audio language the next stream should start on (chosen in the audio/quality panels).
     internal var requestedSourceAudioLanguage: String? = null
+    // Fork: latest player settings (cap, languages) and the failover to the next source.
+    internal var latestPlayerSettings: com.nuvio.tv.data.local.PlayerSettings? = null
+    internal val sourceFailover = SourceFailoverState()
     internal var persistedTrackPreference: TrackPreference? = null
     internal var pendingEngineSwitchTrackPreference: PendingEngineSwitchTrackPreference? = null
     internal var explicitSubtitleSelectionForEngineSwitch: ExplicitSubtitleSelectionForEngineSwitch? = null

@@ -18,7 +18,7 @@ private const val AudioMarker = "🔊"
 private const val SubtitleMarker = "💬"
 private const val OtherTracksMarker = "🌐"
 
-internal enum class StreamQualityBucket { UHD_4K, QHD_1440, FHD_1080, HD_720, SD, OTHER }
+enum class StreamQualityBucket { UHD_4K, QHD_1440, FHD_1080, HD_720, SD, OTHER }
 
 internal data class StreamTraits(
     val audioLanguages: List<String>,

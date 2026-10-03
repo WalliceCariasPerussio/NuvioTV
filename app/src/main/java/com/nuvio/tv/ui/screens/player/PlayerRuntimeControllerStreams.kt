@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.nuvio.tv.ui.screens.stream.matchesStreamFilter
+import com.nuvio.tv.ui.screens.stream.autoPlayAudioLanguages
+import com.nuvio.tv.ui.screens.stream.bucket
 
 /** Hard ceiling for next-episode stream search to prevent hanging forever. */
 private const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
@@ -1816,6 +1818,13 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             } else {
                 playerSettings.streamAutoPlayRegex
             }
+            // Fork: BEST_PREFERRED_AUDIO keeps the language playing now (like Netflix), then the
+            // preferred ones, within the quality cap.
+            val nextEpisodeLanguages = (
+                listOfNotNull(_uiState.value.currentAudioLanguage()) +
+                    playerSettings.autoPlayAudioLanguages()
+                ).distinct()
+            val nextEpisodeMaxQuality = playerSettings.streamAutoPlayMaxQuality.bucket
             var selectedStream: Stream? = null
             var lastSuccessData: List<AddonStreams>? = null
             var autoSelectTriggered = false
@@ -1836,13 +1845,19 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
                     installedAddonNames = installedAddonOrder.toSet(),
                     selectedAddons = effectiveSelectedAddons,
                     selectedPlugins = effectiveSelectedPlugins,
-                    preferredBingeGroup = if (playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode) {
+                    preferredBingeGroup = if (
+                        playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode ||
+                        effectiveMode == StreamAutoPlayMode.BEST_PREFERRED_AUDIO // fork: keep the source
+                    ) {
                         currentStreamBingeGroup
                     } else {
                         null
                     },
                     preferBingeGroupInSelection = playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode,
-                    bingeGroupOnly = bingeGroupOnlyManualMode
+                    bingeGroupOnly = bingeGroupOnlyManualMode,
+                    preferredLanguages = nextEpisodeLanguages,
+                    maxQuality = nextEpisodeMaxQuality,
+                    preferredAddon = _uiState.value.currentStreamAddonName
                 )
             }
 

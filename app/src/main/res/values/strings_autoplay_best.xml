@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: autoplay "best in my language" and the automatic quality cap. -->
+<resources>
+    <string name="autoplay_mode_best_audio">Best quality in my language</string>
+    <string name="autoplay_mode_best_audio_desc">Play the best source with audio in your preferred language (then the secondary one), up to the maximum quality. If none, shows the sources.</string>
+    <string name="stream_auto_play_best_audio_short">Best in my language</string>
+    <string name="autoplay_max_quality">Maximum automatic quality</string>
+    <string name="autoplay_max_quality_sub">Highest quality picked without asking. Higher ones stay available in the Quality panel.</string>
+    <string name="autoplay_max_quality_no_limit">No limit</string>
+    <string name="autoplay_max_quality_4k">4K</string>
+    <string name="autoplay_max_quality_1080">1080p</string>
+    <string name="autoplay_max_quality_720">720p</string>
+</resources>

@@ -13,6 +13,7 @@ object StreamAutoPlayPolicy {
             StreamAutoPlayMode.MANUAL -> false
             StreamAutoPlayMode.FIRST_STREAM -> true
             StreamAutoPlayMode.REGEX_MATCH -> isRegexSelectionConfigured(playerSettings.streamAutoPlayRegex)
+            StreamAutoPlayMode.BEST_PREFERRED_AUDIO -> true
         }
     }
 

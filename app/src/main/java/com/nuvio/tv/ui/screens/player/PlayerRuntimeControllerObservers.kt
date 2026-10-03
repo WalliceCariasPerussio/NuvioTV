@@ -389,6 +389,7 @@ internal fun PlayerRuntimeController.observeSubtitleSettings() {
             autoSwitchInternalPlayerOnErrorEnabled = settings.autoSwitchInternalPlayerOnError
             currentInternalPlayerEngine = resolvedInternalPlayerEngine
             streamAutoPlayModeSetting = settings.streamAutoPlayMode
+            latestPlayerSettings = settings // fork
             streamAutoPlayNextEpisodeEnabledSetting = settings.streamAutoPlayNextEpisodeEnabled
             streamAutoPlayTimeoutSecondsSetting = settings.streamAutoPlayTimeoutSeconds
             preloadNextEpisodeSourcesSetting = settings.preloadNextEpisodeSources
@@ -919,6 +920,7 @@ internal fun PlayerRuntimeController.handleVc1PlaybackFailure(errorMessage: Stri
     errorRetryJob = null
     releasePlayer(flushPlaybackState = false)
     cancelNextEpisodeAutoPlayOnFatalError()
+    if (tryAutoSourceFailover(displayMessage)) return // fork
     _uiState.update {
         it.copy(
             error = displayMessage,

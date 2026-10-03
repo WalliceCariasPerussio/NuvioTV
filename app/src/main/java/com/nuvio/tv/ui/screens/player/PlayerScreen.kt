@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.HighQuality
 import com.nuvio.tv.ui.screens.stream.preferredAudioTargets
+import com.nuvio.tv.ui.screens.stream.bucket
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1641,7 +1642,8 @@ fun PlayerScreen(
             playerSettings,
         ) {
             uiState.buildSourceTrackOptions(
-                playerSettings?.let { preferredAudioTargets(it, contentOriginalLanguage = null) }.orEmpty()
+                preferredTargets = playerSettings?.let { preferredAudioTargets(it, contentOriginalLanguage = null) }.orEmpty(),
+                maxQuality = playerSettings?.streamAutoPlayMaxQuality?.bucket
             )
         }
 
