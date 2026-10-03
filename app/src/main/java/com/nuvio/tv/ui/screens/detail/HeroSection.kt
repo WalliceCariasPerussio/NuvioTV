@@ -120,7 +120,8 @@ fun HeroContentSection(
     onHeroActionFocused: () -> Unit = {},
     onPlayFocusRestored: () -> Unit = {},
     onShowFullDescription: () -> Unit = {},
-    onTruncationChanged: (Boolean) -> Unit = {}
+    onTruncationChanged: (Boolean) -> Unit = {},
+    belowPlayContent: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isSeriesApi = remember(meta.apiType) {
@@ -320,6 +321,8 @@ fun HeroContentSection(
                             )
                         }
                     }
+
+                    belowPlayContent()
 
                     Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
 

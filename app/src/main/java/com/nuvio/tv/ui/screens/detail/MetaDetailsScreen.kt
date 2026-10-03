@@ -1287,6 +1287,11 @@ private fun MetaDetailsContent(
         )
     }
     val isPlayEnabled = playbackAvailability.canStream(meta.apiType, heroVideo?.id ?: meta.id, meta.id, heroVideo)
+    val streamPrefetch: DetailStreamPrefetchViewModel = hiltViewModel()
+    val streamPrefetchStatus by streamPrefetch.status.collectAsStateWithLifecycle()
+    LaunchedEffect(meta.id, heroVideo?.id, isPlayEnabled, shufflePoolEmpty) {
+        streamPrefetch.prefetch(detailStreamPrefetchRequest(meta, heroVideo, canPlay = isPlayEnabled && !shufflePoolEmpty))
+    }
     val canPlayEpisode = remember(playbackAvailability, meta.apiType, meta.id) {
         { video: Video -> playbackAvailability.canStream(meta.apiType, video.id, meta.id, video) }
     }
@@ -2430,6 +2435,7 @@ private fun MetaDetailsContent(
                         nextEpisode = nextEpisode,
                         nextToWatch = nextToWatch,
                         onPlayClick = { if (shufflePoolEmpty) showRandomEpisodeOverlay = true else heroPlayClick() },
+                        belowPlayContent = { DetailStreamPrefetchStatusRow(streamPrefetchStatus) },
                         isPlayEnabled = shufflePoolEmpty || isPlayEnabled,
                         onPlayLongPress = if (!shufflePoolEmpty && isPlayEnabled && (showManualPlayOption || nextToWatch?.isResume == true)) {
                             { showHeroPlayOptionsDialog = true }
