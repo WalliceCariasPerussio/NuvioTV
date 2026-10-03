@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="detail_stream_prefetch_loading">Finding streams…</string>
+    <plurals name="detail_stream_prefetch_loading_found">
+        <item quantity="one">Finding streams… %1$d found</item>
+        <item quantity="other">Finding streams… %1$d found</item>
+    </plurals>
+    <plurals name="detail_stream_prefetch_found">
+        <item quantity="one">%1$d stream found</item>
+        <item quantity="other">%1$d streams found</item>
+    </plurals>
+    <string name="detail_stream_prefetch_in_language">%1$d in %2$s</string>
+    <string name="detail_stream_prefetch_none_in_language">none in %1$s</string>
+    <string name="detail_stream_prefetch_none">No streams found</string>
+    <string name="detail_stream_prefetch_failed">Couldn\'t load streams</string>
+    <string name="stream_filter_language_portuguese">Portuguese</string>
+    <string name="stream_filter_language_unknown">Unidentified</string>
+    <string name="stream_filter_quality_other">Other</string>
+</resources>

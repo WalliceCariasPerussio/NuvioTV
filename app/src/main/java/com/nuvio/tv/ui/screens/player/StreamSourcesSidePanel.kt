@@ -57,10 +57,12 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import androidx.compose.ui.platform.LocalContext
+import com.nuvio.tv.ui.screens.stream.rememberStreamAudioQualityChipState
 
 @Composable
 internal fun StreamSourcesSidePanel(
     uiState: PlayerUiState,
+    playerSettings: com.nuvio.tv.data.local.PlayerSettings? = null,
     streamsFocusRequester: FocusRequester,
     onClose: () -> Unit,
     onReload: () -> Unit,
@@ -79,12 +81,15 @@ internal fun StreamSourcesSidePanel(
     var focusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val closeButtonFocusRequester = remember { FocusRequester() }
 
-    val orderedAddonNames = remember(uiState.sourceAvailableAddons, uiState.sourceChips) {
-        buildList {
-            addAll(uiState.sourceAvailableAddons)
-            uiState.sourceChips.forEach { if (it.name !in this) add(it.name) }
-        }
-    }
+    val audioQualityChips = rememberStreamAudioQualityChipState(
+        allStreams = uiState.sourceAllStreams,
+        selectedFilter = uiState.sourceSelectedAddonFilter,
+        playerSettings = playerSettings,
+        onFilterSelected = onAddonFilterSelected,
+    )
+    // The chip row and D-pad left/right on the list cycle audio languages instead of addons.
+    val orderedAddonNames = audioQualityChips.languageNames
+    val selectedLanguageName = audioQualityChips.selectedLanguageName
     val refreshFocusRequester = remember { FocusRequester() }
     val allFocusRequester = remember { FocusRequester() }
     val addonFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -189,7 +194,7 @@ internal fun StreamSourcesSidePanel(
     // Called when navigating tabs horizontally from within the stream list
     fun onAddonFilterSelectedGuarded(addon: String?) {
         userMovedFromFirstResult = true
-        onAddonFilterSelected(addon)
+        audioQualityChips.selectLanguage(addon)
         focusJob?.cancel()
         focusJob = scope.coroutineLaunch {
             withFrameNanos {}
@@ -237,8 +242,8 @@ internal fun StreamSourcesSidePanel(
                             if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
                                 event.key == Key.DirectionDown
                             ) {
-                                val activeIdx = if (uiState.sourceSelectedAddonFilter == null) 1
-                                    else (orderedAddonNames.indexOf(uiState.sourceSelectedAddonFilter) + 2).coerceAtLeast(1)
+                                val activeIdx = if (selectedLanguageName == null) 1
+                                    else (orderedAddonNames.indexOf(selectedLanguageName) + 2).coerceAtLeast(1)
                                 requestChipFocus(activeIdx)
                                 true
                             } else false
@@ -278,15 +283,14 @@ internal fun StreamSourcesSidePanel(
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
 
             AnimatedVisibility(
-                visible = uiState.sourceChips.isNotEmpty() || uiState.sourceAvailableAddons.isNotEmpty(),
+                visible = uiState.sourceChips.isNotEmpty() || uiState.sourceAllStreams.isNotEmpty(),
                 enter = fadeIn(animationSpec = tween(200)),
                 exit = fadeOut(animationSpec = tween(120))
             ) {
                 Box(modifier = Modifier.onFocusChanged { chipsHasFocus = it.hasFocus }) {
                     AddonFilterChips(
-                        addons = uiState.sourceAvailableAddons,
-                        sourceChips = uiState.sourceChips,
-                        selectedAddon = uiState.sourceSelectedAddonFilter,
+                        addons = audioQualityChips.languageNames,
+                        selectedAddon = selectedLanguageName,
                         isStillFetching = uiState.isLoadingSourceStreams ||
                             uiState.sourceChips.any { it.status == SourceChipStatus.LOADING },
                         onRefresh = {
@@ -294,7 +298,7 @@ internal fun StreamSourcesSidePanel(
                             firstResultFocusAssigned = false
                             onReload()
                         },
-                        onAddonSelected = { onAddonFilterSelected(it) },
+                        onAddonSelected = { audioQualityChips.selectLanguage(it) },
                         externalFocusRequesters = chipFocusRequesters,
                         externalOrderedNames = orderedAddonNames,
                         onUpKey = {
@@ -303,6 +307,14 @@ internal fun StreamSourcesSidePanel(
                         debugTag = "SourcesSidePanel"
                     )
                 }
+            }
+            if (audioQualityChips.qualityNames.isNotEmpty()) {
+                AddonFilterChips(
+                    addons = audioQualityChips.qualityNames,
+                    selectedAddon = audioQualityChips.selectedQualityName,
+                    onAddonSelected = { audioQualityChips.selectQuality(it) },
+                    debugTag = "SourcesSidePanelQuality"
+                )
             }
 
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
@@ -386,7 +398,7 @@ internal fun StreamSourcesSidePanel(
 
                                 if (orderedAddonNames.isEmpty()) return@onKeyEvent false
                                 val allOptions = listOf<String?>(null) + orderedAddonNames
-                                val currentIdx = allOptions.indexOf(uiState.sourceSelectedAddonFilter)
+                                val currentIdx = allOptions.indexOf(selectedLanguageName)
                                 when (event.key) {
                                     Key.DirectionLeft -> {
                                         if (isRtl) {
@@ -461,7 +473,7 @@ internal fun StreamSourcesSidePanel(
     }
 }
 
-private fun findCurrentStreamIndex(
+internal fun findCurrentStreamIndex(
     streams: List<Stream>,
     currentStreamInfoHash: String?,
     currentStreamFileIdx: Int?,

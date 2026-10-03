@@ -185,6 +185,9 @@ class PlayerViewModel @Inject constructor(
         .map(StreamAutoPlayPolicy::isEffectivelyEnabled)
         .distinctUntilChanged()
 
+    /** Audio language preferences, read by the source chips to pick their default. */
+    val playerSettings = playerSettingsDataStore.playerSettings
+
     val exoPlayer: ExoPlayer?
         get() = controller.exoPlayer
 

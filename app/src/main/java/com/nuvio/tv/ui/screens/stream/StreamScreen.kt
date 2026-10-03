@@ -141,6 +141,7 @@ fun StreamScreen(
     var showP2pConsentDialog by remember { mutableStateOf(false) }
     var pendingTorrentPlaybackInfo by remember { mutableStateOf<StreamPlaybackInfo?>(null) }
     val p2pEnabled by viewModel.p2pEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle(initialValue = null)
     val streamBadgeSettings by viewModel.streamBadgeSettings.collectAsStateWithLifecycle(
         initialValue = StreamBadgeSettings()
     )
@@ -442,6 +443,8 @@ fun StreamScreen(
                     isLoading = uiState.isLoading,
                     error = uiState.error,
                     streams = uiState.filteredStreams,
+                    allStreams = uiState.allStreams,
+                    playerSettings = playerSettings,
                     availableAddons = uiState.availableAddons,
                     sourceChips = uiState.sourceChips,
                     selectedAddonFilter = uiState.selectedAddonFilter,
@@ -724,6 +727,8 @@ private fun RightStreamSection(
     isLoading: Boolean,
     error: String?,
     streams: List<Stream>,
+    allStreams: List<Stream>,
+    playerSettings: com.nuvio.tv.data.local.PlayerSettings?,
     availableAddons: List<String>,
     sourceChips: List<SourceChipItem>,
     selectedAddonFilter: String?,
@@ -750,12 +755,15 @@ private fun RightStreamSection(
     var firstResultFocusAssigned by remember { mutableStateOf(shouldRestoreFocusedStream) }
     val scope = rememberCoroutineScope()
     var focusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    val orderedAddonNames = remember(availableAddons, sourceChips) {
-        buildList {
-            addAll(availableAddons)
-            sourceChips.forEach { if (it.name !in this) add(it.name) }
-        }
-    }
+    val audioQualityChips = rememberStreamAudioQualityChipState(
+        allStreams = allStreams,
+        selectedFilter = selectedAddonFilter,
+        playerSettings = playerSettings,
+        onFilterSelected = onAddonFilterSelected,
+    )
+    // The chip row and D-pad left/right on the list cycle audio languages instead of addons.
+    val orderedAddonNames = audioQualityChips.languageNames
+    val selectedLanguageName = audioQualityChips.selectedLanguageName
     val firstStreamKey = streams.firstOrNull()?.stableKey(0)
     val refreshFocusRequester = remember { FocusRequester() }
     val allFocusRequester = remember { FocusRequester() }
@@ -773,7 +781,7 @@ private fun RightStreamSection(
     }
     fun onAddonFilterSelectedGuarded(addon: String?) {
         userMovedFromFirstResult = true
-        onAddonFilterSelected(addon)
+        audioQualityChips.selectLanguage(addon)
         focusJob?.cancel()
         focusJob = scope.coroutineLaunch {
             withFrameNanos {}
@@ -831,27 +839,36 @@ private fun RightStreamSection(
     ) {
         val chipRowHeight = NuvioTheme.spacing.huge
 
-        // Addon filter chips
+        // Audio language chips (in place of the addon chips), then quality chips
         Box(modifier = Modifier.height(chipRowHeight)) {
             androidx.compose.animation.AnimatedVisibility(
-                visible = sourceChips.isNotEmpty() || (!isLoading && availableAddons.isNotEmpty()),
+                visible = sourceChips.isNotEmpty() || allStreams.isNotEmpty(),
                 enter = fadeIn(animationSpec = tween(300)),
                 exit = fadeOut(animationSpec = tween(300))
             ) {
                 AddonFilterChips(
-                    addons = availableAddons,
-                    sourceChips = sourceChips,
-                    selectedAddon = selectedAddonFilter,
+                    addons = audioQualityChips.languageNames,
+                    selectedAddon = selectedLanguageName,
                     isStillFetching = sourceChips.any { it.status == SourceChipStatus.LOADING },
                     onRefresh = {
                         userMovedFromFirstResult = false
                         firstResultFocusAssigned = false
                         onRefresh()
                     },
-                    onAddonSelected = { onAddonFilterSelected(it) },
+                    onAddonSelected = { audioQualityChips.selectLanguage(it) },
                     externalFocusRequesters = chipFocusRequesters,
                     externalOrderedNames = orderedAddonNames,
                     debugTag = "StreamScreen"
+                )
+            }
+        }
+        if (audioQualityChips.qualityNames.isNotEmpty()) {
+            Box(modifier = Modifier.height(chipRowHeight)) {
+                AddonFilterChips(
+                    addons = audioQualityChips.qualityNames,
+                    selectedAddon = audioQualityChips.selectedQualityName,
+                    onAddonSelected = { audioQualityChips.selectQuality(it) },
+                    debugTag = "StreamScreenQuality"
                 )
             }
         }
@@ -914,7 +931,7 @@ private fun RightStreamSection(
                             onRestoreFocusedStreamHandled = onRestoreFocusedStreamHandled,
                             firstStreamFocusRequestId = firstStreamFocusRequestId,
                             availableAddons = availableAddons,
-                            selectedAddonFilter = selectedAddonFilter,
+                            selectedAddonFilter = selectedLanguageName,
                             showFileSizeBadges = showFileSizeBadges,
                             showAddonLogo = showAddonLogo,
                             badgePlacement = badgePlacement,

@@ -179,6 +179,7 @@ fun PlayerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val postPlayRecommendationState by viewModel.postPlayRecommendationUiState.collectAsState()
     val effectiveAutoplayEnabled by viewModel.effectiveAutoplayEnabled.collectAsState(initial = false)
+    val playerSettings by viewModel.playerSettings.collectAsState(initial = null)
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -1555,6 +1556,7 @@ fun PlayerScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 StreamSourcesSidePanel(
                     uiState = uiState,
+                    playerSettings = playerSettings,
                     streamsFocusRequester = sourceStreamsFocusRequester,
                     onClose = {
                         if (uiState.currentStreamUrl.isNullOrBlank()) {

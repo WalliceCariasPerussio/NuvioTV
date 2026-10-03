@@ -164,6 +164,9 @@ class StreamScreenViewModel @Inject constructor(
         .map { it.playerPreference }
         .distinctUntilChanged()
 
+    /** Audio language preferences, read by the audio chips to pick their default. */
+    val playerSettings = playerSettingsDataStore.playerSettings
+
     val p2pEnabled = torrentSettings.settings
         .map { it.p2pEnabled }
         .distinctUntilChanged()
@@ -213,7 +216,7 @@ class StreamScreenViewModel @Inject constructor(
                         val fullFiltered = if (currentFilter == null) {
                             updatedAllStreams
                         } else {
-                            updatedAllStreams.filter { it.addonName == currentFilter }
+                            updatedAllStreams.filter { it.matchesStreamFilter(currentFilter) }
                         }
                         streamFilterFullList = fullFiltered
                         val pageEnd = state.filteredStreams.size
@@ -533,7 +536,7 @@ class StreamScreenViewModel @Inject constructor(
                 val fullFiltered = if (currentFilter == null) {
                     allStreams
                 } else {
-                    allStreams.filter { it.addonName == currentFilter }
+                    allStreams.filter { it.matchesStreamFilter(currentFilter) }
                 }
                 streamFilterFullList = fullFiltered
                 val currentPageSize = _uiState.value.filteredStreams.size
@@ -640,7 +643,7 @@ class StreamScreenViewModel @Inject constructor(
                                 val fullFiltered = if (currentFilter == null) {
                                     updatedAllStreams
                                 } else {
-                                    updatedAllStreams.filter { it.addonName == currentFilter }
+                                    updatedAllStreams.filter { it.matchesStreamFilter(currentFilter) }
                                 }
                                 streamFilterFullList = fullFiltered
                                 val pageEnd = state.filteredStreams.size
@@ -1140,7 +1143,7 @@ class StreamScreenViewModel @Inject constructor(
             val fullFiltered = if (addonName == null) {
                 state.allStreams
             } else {
-                state.allStreams.filter { it.addonName == addonName }
+                state.allStreams.filter { it.matchesStreamFilter(addonName) }
             }
             streamFilterFullList = fullFiltered
             val paginatedStreams = if (fullFiltered.size > STREAM_FILTER_PAGE_SIZE) {

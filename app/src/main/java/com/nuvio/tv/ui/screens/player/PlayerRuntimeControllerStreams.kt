@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.nuvio.tv.ui.screens.stream.matchesStreamFilter
 
 /** Hard ceiling for next-episode stream search to prevent hanging forever. */
 private const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
@@ -92,7 +93,7 @@ internal fun PlayerRuntimeController.scheduleEpisodeBadgeApplication() {
             val selectedAddon = current.episodeSelectedAddonFilter
             current.copy(
                 episodeAllStreams = badgedStreams,
-                episodeFilteredStreams = if (selectedAddon == null) badgedStreams else badgedStreams.filter { it.addonName == selectedAddon }
+                episodeFilteredStreams = if (selectedAddon == null) badgedStreams else badgedStreams.filter { it.matchesStreamFilter(selectedAddon) }
             )
         }
     }
@@ -260,7 +261,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                         val filteredStreams = if (selectedAddon == null) {
                             badgePreserved
                         } else {
-                            badgePreserved.filter { stream -> stream.addonName == selectedAddon }
+                            badgePreserved.filter { stream -> stream.matchesStreamFilter(selectedAddon) }
                         }
                         sourceFilterFullList = filteredStreams
                         val paginatedStreams = if (filteredStreams.size > SOURCE_FILTER_PAGE_SIZE) {
@@ -397,7 +398,7 @@ internal fun PlayerRuntimeController.filterSourceStreamsByAddon(addonName: Strin
     val fullFiltered = if (addonName == null) {
         allStreams
     } else {
-        allStreams.filter { it.addonName == addonName }
+        allStreams.filter { it.matchesStreamFilter(addonName) }
     }
     sourceFilterFullList = fullFiltered
     val paginatedStreams = if (fullFiltered.size > SOURCE_FILTER_PAGE_SIZE) {
@@ -1181,7 +1182,7 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(video: Video, forceRe
                     val filteredStreams = if (currentFilter == null) {
                         allStreams
                     } else {
-                        allStreams.filter { it.addonName == currentFilter }
+                        allStreams.filter { it.matchesStreamFilter(currentFilter) }
                     }
                     _uiState.update {
                         it.copy(
@@ -1295,7 +1296,7 @@ private fun List<Stream>.filterByAddon(addonName: String?): List<Stream> =
     if (addonName == null) {
         this
     } else {
-        filter { it.addonName == addonName }
+        filter { it.matchesStreamFilter(addonName) }
     }
 
 internal fun PlayerRuntimeController.reloadEpisodeStreams() {

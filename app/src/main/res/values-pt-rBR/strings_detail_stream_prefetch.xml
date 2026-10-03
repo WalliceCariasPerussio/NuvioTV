@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="detail_stream_prefetch_loading">Buscando fontes…</string>
+    <plurals name="detail_stream_prefetch_loading_found">
+        <item quantity="one">Buscando fontes… %1$d encontrada</item>
+        <item quantity="other">Buscando fontes… %1$d encontradas</item>
+    </plurals>
+    <plurals name="detail_stream_prefetch_found">
+        <item quantity="one">%1$d fonte encontrada</item>
+        <item quantity="other">%1$d fontes encontradas</item>
+    </plurals>
+    <string name="detail_stream_prefetch_in_language">%1$d em %2$s</string>
+    <string name="detail_stream_prefetch_none_in_language">nenhuma em %1$s</string>
+    <string name="detail_stream_prefetch_none">Nenhuma fonte encontrada</string>
+    <string name="detail_stream_prefetch_failed">Não foi possível carregar as fontes</string>
+    <string name="stream_filter_language_portuguese">Português</string>
+    <string name="stream_filter_language_unknown">Não identificado</string>
+    <string name="stream_filter_quality_other">Outras</string>
+</resources>
