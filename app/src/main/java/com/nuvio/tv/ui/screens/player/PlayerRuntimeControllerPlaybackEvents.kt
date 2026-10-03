@@ -1440,6 +1440,7 @@ fun PlayerRuntimeController.onEvent(event: PlayerEvent) {
             _uiState.update {
                 it.copy(
                     showAudioOverlay = true,
+                    audioOverlayQualityMode = false,
                     showSubtitleOverlay = false,
                     showSubtitleStylePanel = false,
                     showMoreDialog = false,

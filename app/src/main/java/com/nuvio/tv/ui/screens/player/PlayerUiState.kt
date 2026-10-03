@@ -104,6 +104,8 @@ data class PlayerUiState(
     val centerMixLevelDb: Int = 0,
     val isCenterMixAvailable: Boolean = false,
     val showAudioOverlay: Boolean = false,
+    /** Fork: the audio overlay slot shows the source quality panel instead. */
+    val audioOverlayQualityMode: Boolean = false,
     val showSubtitleOverlay: Boolean = false,
     val showSubtitleStylePanel: Boolean = false,
     val showSubtitleTimingDialog: Boolean = false,

@@ -896,6 +896,7 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
     audioTracks: List<TrackInfo>,
     subtitleTracks: List<TrackInfo>
 ) {
+    applyRequestedSourceAudioLanguage(audioTracks) // fork
     val switchPending = pendingEngineSwitchTrackPreference
         ?.takeIf { it.streamUrl == currentStreamUrl }
     if (pendingEngineSwitchTrackPreference != null && switchPending == null) {

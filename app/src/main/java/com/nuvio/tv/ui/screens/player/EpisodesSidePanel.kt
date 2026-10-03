@@ -81,11 +81,13 @@ import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.launch as coroutineLaunch
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.screens.stream.rememberStreamAudioQualityChipState
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 internal fun EpisodesSidePanel(
     uiState: PlayerUiState,
+    playerSettings: com.nuvio.tv.data.local.PlayerSettings? = null,
     episodesFocusRequester: FocusRequester,
     streamsFocusRequester: FocusRequester,
     onClose: () -> Unit,
@@ -141,6 +143,7 @@ internal fun EpisodesSidePanel(
                 if (uiState.showEpisodeStreams) {
                     EpisodeStreamsView(
                         uiState = uiState,
+                        playerSettings = playerSettings,
                         onBackToEpisodes = onBackToEpisodes,
                         onReload = onReloadEpisodeStreams,
                         onAddonFilterSelected = onAddonFilterSelected,
@@ -162,6 +165,7 @@ internal fun EpisodesSidePanel(
 @Composable
 private fun EpisodeStreamsView(
     uiState: PlayerUiState,
+    playerSettings: com.nuvio.tv.data.local.PlayerSettings?,
     onBackToEpisodes: () -> Unit,
     onReload: () -> Unit,
     onAddonFilterSelected: (String?) -> Unit,
@@ -177,12 +181,15 @@ private fun EpisodeStreamsView(
     var focusJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val backButtonFocusRequester = remember { FocusRequester() }
 
-    val orderedAddonNames = remember(uiState.episodeAvailableAddons, uiState.episodeSourceChips) {
-        buildList {
-            addAll(uiState.episodeAvailableAddons)
-            uiState.episodeSourceChips.forEach { if (it.name !in this) add(it.name) }
-        }
-    }
+    val audioQualityChips = rememberStreamAudioQualityChipState(
+        allStreams = uiState.episodeAllStreams,
+        selectedFilter = uiState.episodeSelectedAddonFilter,
+        playerSettings = playerSettings,
+        onFilterSelected = onAddonFilterSelected,
+    )
+    // The chip row and D-pad left/right on the list cycle audio languages instead of addons.
+    val orderedAddonNames = audioQualityChips.languageNames
+    val selectedLanguageName = audioQualityChips.selectedLanguageName
     val refreshFocusRequester = remember { FocusRequester() }
     val allFocusRequester = remember { FocusRequester() }
     val addonFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -283,7 +290,7 @@ private fun EpisodeStreamsView(
 
     fun onAddonFilterSelectedGuarded(addon: String?) {
         userMovedFromFirstResult = true
-        onAddonFilterSelected(addon)
+        audioQualityChips.selectLanguage(addon)
         focusJob?.cancel()
         focusJob = scope.coroutineLaunch {
             withFrameNanos {}
@@ -316,8 +323,8 @@ private fun EpisodeStreamsView(
                     if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
                         event.key == androidx.compose.ui.input.key.Key.DirectionDown
                     ) {
-                        val activeIdx = if (uiState.episodeSelectedAddonFilter == null) 1
-                            else (orderedAddonNames.indexOf(uiState.episodeSelectedAddonFilter) + 2).coerceAtLeast(1)
+                        val activeIdx = if (selectedLanguageName == null) 1
+                            else (orderedAddonNames.indexOf(selectedLanguageName) + 2).coerceAtLeast(1)
                         requestChipFocus(activeIdx)
                         true
                     } else false
@@ -346,15 +353,14 @@ private fun EpisodeStreamsView(
 
     // --- Filter chips ---
     AnimatedVisibility(
-        visible = uiState.episodeSourceChips.isNotEmpty() || uiState.episodeAvailableAddons.isNotEmpty(),
+        visible = uiState.episodeSourceChips.isNotEmpty() || uiState.episodeAllStreams.isNotEmpty(),
         enter = fadeIn(animationSpec = tween(200)),
         exit = fadeOut(animationSpec = tween(120))
     ) {
         Box(modifier = Modifier.onFocusChanged { chipsHasFocus = it.hasFocus }) {
             AddonFilterChips(
-                addons = uiState.episodeAvailableAddons,
-                sourceChips = uiState.episodeSourceChips,
-                selectedAddon = uiState.episodeSelectedAddonFilter,
+                addons = audioQualityChips.languageNames,
+                selectedAddon = selectedLanguageName,
                 isStillFetching = uiState.isLoadingEpisodeStreams ||
                     uiState.episodeSourceChips.any { it.status == SourceChipStatus.LOADING },
                 onRefresh = {
@@ -362,7 +368,7 @@ private fun EpisodeStreamsView(
                     firstResultFocusAssigned = false
                     onReload()
                 },
-                onAddonSelected = { onAddonFilterSelected(it) },
+                onAddonSelected = { audioQualityChips.selectLanguage(it) },
                 externalFocusRequesters = chipFocusRequesters,
                 externalOrderedNames = orderedAddonNames,
                 onUpKey = {
@@ -371,6 +377,14 @@ private fun EpisodeStreamsView(
                 debugTag = "EpisodeSidePanel"
             )
         }
+    }
+    if (audioQualityChips.qualityNames.isNotEmpty()) {
+        AddonFilterChips(
+            addons = audioQualityChips.qualityNames,
+            selectedAddon = audioQualityChips.selectedQualityName,
+            onAddonSelected = { audioQualityChips.selectQuality(it) },
+            debugTag = "EpisodeSidePanelQuality"
+        )
     }
 
     Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
@@ -429,7 +443,7 @@ private fun EpisodeStreamsView(
 
                         if (orderedAddonNames.isEmpty()) return@onKeyEvent false
                         val allOptions = listOf<String?>(null) + orderedAddonNames
-                        val currentIdx = allOptions.indexOf(uiState.episodeSelectedAddonFilter)
+                        val currentIdx = allOptions.indexOf(selectedLanguageName)
                         when (event.key) {
                             androidx.compose.ui.input.key.Key.DirectionLeft -> {
                                 if (isRtl) {
@@ -484,8 +498,8 @@ private fun EpisodeStreamsView(
                             }
                         },
                         onUpKey = if (index == 0 && chipFocusRequesters.isNotEmpty()) {{
-                            val idx = if (uiState.episodeSelectedAddonFilter == null) 1
-                                      else orderedAddonNames.indexOf(uiState.episodeSelectedAddonFilter) + 2
+                            val idx = if (selectedLanguageName == null) 1
+                                      else orderedAddonNames.indexOf(selectedLanguageName) + 2
                             requestChipFocus(idx)
                         }} else null
                     )

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_source_tracks_scope_current_stream">Stream atual</string>
+    <string name="player_source_tracks_scope_all_audio">Todos</string>
+    <string name="player_source_tracks_scope_current_audio">Áudio atual · %1$s</string>
+    <string name="player_source_tracks_scope_all_qualities">Todas</string>
+    <string name="player_source_tracks_quality_title">Qualidade</string>
+    <string name="player_source_tracks_best_quality">Melhor: %1$s · %2$s</string>
+    <plurals name="player_source_tracks_sources">
+        <item quantity="one">%d fonte</item>
+        <item quantity="other">%d fontes</item>
+    </plurals>
+    <string name="player_source_tracks_current">Tocando</string>
+    <string name="player_source_tracks_loading">Buscando fontes…</string>
+    <string name="player_source_tracks_none">Nenhuma fonte encontrada</string>
+    <string name="player_source_tracks_missing_audio">Nenhuma fonte em %1$s tem áudio %2$s.</string>
+    <string name="player_source_tracks_switch_audio_to">Mudar o áudio para:</string>
+    <string name="player_source_tracks_cancel">Cancelar</string>
+</resources>

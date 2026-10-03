@@ -521,6 +521,8 @@ class PlayerRuntimeController(
     internal var pendingAddonSubtitleTrackId: String? = null
     internal var pendingAudioSelectionAfterSubtitleRefresh: PendingAudioSelection? = null
     internal var rememberedTrackPreference: TrackPreference? = null
+    // Fork: audio language the next stream should start on (chosen in the audio/quality panels).
+    internal var requestedSourceAudioLanguage: String? = null
     internal var persistedTrackPreference: TrackPreference? = null
     internal var pendingEngineSwitchTrackPreference: PendingEngineSwitchTrackPreference? = null
     internal var explicitSubtitleSelectionForEngineSwitch: ExplicitSubtitleSelectionForEngineSwitch? = null

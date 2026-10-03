@@ -76,8 +76,11 @@ internal fun AudioSelectionOverlay(
     onCenterMixLevelChange: (Int) -> Unit,
     onPersistAmplificationChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sourceAudio: SourceAudioScope? = null,
 ) {
+    // Fork: "Stream atual" (this stream's tracks) by default, or "Todos" (languages of every source).
+    var showAllSources by remember(visible) { mutableStateOf(false) }
     val tracksFocusRequester = remember { FocusRequester() }
     val delayMinusFocusRequester = remember { FocusRequester() }
     val delayPlusFocusRequester = remember { FocusRequester() }
@@ -174,6 +177,16 @@ internal fun AudioSelectionOverlay(
                 color = Color.White,
                 modifier = Modifier.padding(bottom = NuvioTheme.spacing.sm)
             )
+            if (sourceAudio != null) {
+                SourceScopeChips(
+                    labels = listOf(
+                        stringResource(R.string.player_source_tracks_scope_current_stream),
+                        stringResource(R.string.player_source_tracks_scope_all_audio),
+                    ),
+                    selectedIndex = if (showAllSources) 1 else 0,
+                    onSelected = { showAllSources = it == 1 },
+                )
+            }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
@@ -181,7 +194,12 @@ internal fun AudioSelectionOverlay(
                 modifier = Modifier.padding(bottom = NuvioTheme.spacing.sm)
             ) {
                 Column(modifier = Modifier.width(444.dp)) {
-                    AudioTracksContent(
+                    if (showAllSources && sourceAudio != null) {
+                        SourceLanguageOptionsContent(
+                            scope = sourceAudio,
+                            rightFocusRequester = null,
+                        )
+                    } else AudioTracksContent(
                         tracks = tracks,
                         selectedIndex = selectedIndex,
                         listState = listState,

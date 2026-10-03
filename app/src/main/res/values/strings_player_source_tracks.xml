@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: audio panel "All" scope and quality panel, built from every source of the episode. -->
+<resources>
+    <string name="player_source_tracks_scope_current_stream">Current stream</string>
+    <string name="player_source_tracks_scope_all_audio">All</string>
+    <string name="player_source_tracks_scope_current_audio">Current audio · %1$s</string>
+    <string name="player_source_tracks_scope_all_qualities">All</string>
+    <string name="player_source_tracks_quality_title">Quality</string>
+    <string name="player_source_tracks_best_quality">Best: %1$s · %2$s</string>
+    <plurals name="player_source_tracks_sources">
+        <item quantity="one">%d source</item>
+        <item quantity="other">%d sources</item>
+    </plurals>
+    <string name="player_source_tracks_current">Playing</string>
+    <string name="player_source_tracks_loading">Searching sources…</string>
+    <string name="player_source_tracks_none">No sources found</string>
+    <string name="player_source_tracks_missing_audio">No %1$s source has %2$s audio.</string>
+    <string name="player_source_tracks_switch_audio_to">Switch audio to:</string>
+    <string name="player_source_tracks_cancel">Cancel</string>
+</resources>

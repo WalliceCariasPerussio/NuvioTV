@@ -68,6 +68,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.HighQuality
+import com.nuvio.tv.ui.screens.stream.preferredAudioTargets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -1339,7 +1341,7 @@ fun PlayerScreen(
                 onSeekTo = { viewModel.onEvent(PlayerEvent.OnSeekTo(it)) },
                 onShowEpisodesPanel = { viewModel.onEvent(PlayerEvent.OnShowEpisodesPanel) },
                 onShowSourcesPanel = { viewModel.onEvent(PlayerEvent.OnShowSourcesPanel) },
-                onShowAudioDialog = { viewModel.onEvent(PlayerEvent.OnShowAudioOverlay) },
+                onShowAudioDialog = { viewModel.controller.showSourceTrackPanel(qualityMode = false) },
                 onShowSubtitleDialog = { viewModel.onEvent(PlayerEvent.OnShowSubtitleOverlay) },
                 onShowSpeedDialog = { viewModel.onEvent(PlayerEvent.OnShowSpeedDialog) },
                 onToggleAspectRatio = {
@@ -1514,6 +1516,7 @@ fun PlayerScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 EpisodesSidePanel(
                     uiState = uiState,
+                    playerSettings = playerSettings,
                     episodesFocusRequester = episodesFocusRequester,
                     streamsFocusRequester = streamsFocusRequester,
                     onClose = { viewModel.onEvent(PlayerEvent.OnDismissEpisodesPanel) },
@@ -1628,9 +1631,23 @@ fun PlayerScreen(
             }
         }
 
+        // Fork: languages and qualities of every source, for the audio panel's "Todos" and the quality panel.
+        val sourceTrackOptions = remember(
+            uiState.sourceAllStreams,
+            uiState.audioTracks,
+            uiState.selectedAudioTrackIndex,
+            uiState.currentStreamUrl,
+            uiState.currentStreamInfoHash,
+            playerSettings,
+        ) {
+            uiState.buildSourceTrackOptions(
+                playerSettings?.let { preferredAudioTargets(it, contentOriginalLanguage = null) }.orEmpty()
+            )
+        }
+
         // Audio track dialog
         AudioSelectionOverlay(
-            visible = uiState.showAudioOverlay,
+            visible = uiState.showAudioOverlay && !uiState.audioOverlayQualityMode,
             tracks = uiState.audioTracks,
             selectedIndex = uiState.selectedAudioTrackIndex,
             audioDelayMs = uiState.audioDelayMs,
@@ -1651,7 +1668,23 @@ fun PlayerScreen(
             onDismiss = { viewModel.onEvent(PlayerEvent.OnDismissTransientOverlay) },
             modifier = Modifier
                 .fillMaxSize()
-                .zIndex(2.6f)
+                .zIndex(2.6f),
+            sourceAudio = SourceAudioScope(
+                options = sourceTrackOptions,
+                isLoading = uiState.isLoadingSourceStreams,
+                onLanguageSelected = { viewModel.controller.selectSourceAudioLanguage(it) },
+            ),
+        )
+
+        SourceQualityOverlay(
+            visible = uiState.showAudioOverlay && uiState.audioOverlayQualityMode,
+            options = sourceTrackOptions,
+            isLoading = uiState.isLoadingSourceStreams,
+            onQualitySelected = { quality, language -> viewModel.controller.selectSourceQuality(quality, language) },
+            onDismiss = { viewModel.onEvent(PlayerEvent.OnDismissTransientOverlay) },
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(2.6f),
         )
 
         SubtitleSelectionOverlay(
@@ -2385,6 +2418,15 @@ private fun PlayerControlsOverlay(
                             onFocused = onResetHideTimer
                         )
                     }
+
+                    ControlButton(
+                        icon = Icons.Default.HighQuality,
+                        contentDescription = stringResource(R.string.player_source_tracks_quality_title),
+                        onClick = { viewModel.controller.showSourceTrackPanel(qualityMode = true) },
+                        upFocusRequester = progressUpTarget,
+                        onDownKey = onHideControls,
+                        onFocused = onResetHideTimer
+                    )
 
                     ControlButton(
                         icon = Icons.Default.SwapHoriz,
