@@ -149,7 +149,7 @@ internal fun PlayerRuntimeController.showSourcesPanel() {
             showEpisodeStreams = false
         )
     }
-    loadSourceStreams(forceRefresh = false)
+    loadSourceStreams(forceRefresh = isPlaybackFailed())
 }
 
 internal fun PlayerRuntimeController.buildSourceRequestKey(type: String, videoId: String, season: Int?, episode: Int?): String {
@@ -1710,6 +1710,8 @@ internal fun PlayerRuntimeController.preloadNextEpisodeSources() {
 
     nextEpisodePreloadTriggered = true
     nextEpisodePreloadJob?.cancel()
+    // Fork: the player pauses local plugins while it plays; without this only addons would preload.
+    streamRepository.setLocalPluginSearchPaused(false)
     nextEpisodePreloadJob = scope.launch {
         Log.d(PlayerRuntimeController.TAG, "Preloading sources for next episode: S${nextVideo.season}E${nextVideo.episode}")
         streamRepository.getStreamsFromAllAddons(
@@ -1782,7 +1784,8 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
                         postPlayDismissedForCurrentEpisode = true,
                     )
                 }
-                showEpisodeStreamPicker(video = nextVideo, forceRefresh = true)
+                // Fork: reuse the next episode's search the player preloaded and retained.
+                showEpisodeStreamPicker(video = nextVideo, forceRefresh = false)
                 return@launch
             }
 

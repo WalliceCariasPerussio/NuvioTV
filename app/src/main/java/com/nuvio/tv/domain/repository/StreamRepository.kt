@@ -4,6 +4,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.domain.model.StreamSearchTarget
 import kotlinx.coroutines.flow.Flow
 
 interface StreamRepository {
@@ -42,4 +43,10 @@ interface StreamRepository {
         type: String,
         videoId: String
     ): NetworkResult<List<Stream>>
+
+    /**
+     * Keeps these searches cached past their normal expiry, replacing the previous set
+     * (the player retains its current and next episode). An empty set releases them.
+     */
+    fun retainStreamSearches(targets: Set<StreamSearchTarget>) {}
 }

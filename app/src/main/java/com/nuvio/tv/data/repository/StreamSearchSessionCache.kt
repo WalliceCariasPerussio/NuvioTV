@@ -2,6 +2,7 @@ package com.nuvio.tv.data.repository
 
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.domain.model.AddonStreams
+import com.nuvio.tv.domain.model.StreamSearchTarget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -56,6 +57,19 @@ internal class StreamSearchSessionCache(
 
     private val mutex = Mutex()
     private val sessions = LinkedHashMap<StreamSearchRequestKey, Session>(16, 0.75f, true)
+    // Searches the player keeps while it is open (current and next episode): never expired or trimmed.
+    private val retained = java.util.concurrent.ConcurrentHashMap.newKeySet<StreamSearchTarget>()
+
+    fun retain(targets: Set<StreamSearchTarget>) {
+        val normalized = targets.map { it.copy(type = it.type.lowercase()) }.toSet()
+        if (normalized == retained) return
+        retained.retainAll(normalized)
+        retained.addAll(normalized)
+    }
+
+    private fun StreamSearchRequestKey.media() = StreamSearchTarget(type, videoId, season, episode)
+
+    private fun StreamSearchRequestKey.isRetained() = media() in retained
 
     fun observe(
         key: StreamSearchRequestKey,
@@ -189,7 +203,8 @@ internal class StreamSearchSessionCache(
         val now = nowMs()
         val iterator = sessions.entries.iterator()
         while (iterator.hasNext()) {
-            val session = iterator.next().value
+            val (key, session) = iterator.next()
+            if (key.isRetained()) continue
             val completedAt = session.completedAtMs ?: continue
             if (now - completedAt >= completedTtlMs) {
                 iterator.remove()
@@ -200,11 +215,9 @@ internal class StreamSearchSessionCache(
 
     private fun trimToSizeLocked() {
         while (sessions.size > maxEntries) {
-            val iterator = sessions.entries.iterator()
-            if (!iterator.hasNext()) return
-            val session = iterator.next().value
-            iterator.remove()
-            session.cancelAndComplete()
+            val evictable = sessions.entries.firstOrNull { !it.key.isRetained() } ?: return
+            sessions.remove(evictable.key)
+            evictable.value.cancelAndComplete()
         }
     }
 

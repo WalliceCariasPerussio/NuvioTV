@@ -374,6 +374,7 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
         endDetectionArmed = true
     }
     if (!_uiState.value.error.isNullOrBlank()) return
+    retainPlayerStreamSearches()
 
     val state = _uiState.value
     if (state.nextEpisode == null || nextEpisodeVideo == null) {
@@ -386,20 +387,10 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
 
     val effectiveDuration = effectiveDurationEarly
 
-    // Preload: start fetching sources for next episode before the button appears.
-    if (preloadNextEpisodeSourcesSetting && !nextEpisodePreloadTriggered && state.nextEpisode != null) {
-        val preloadLeadMs = streamAutoPlayTimeoutSecondsSetting.toLong() * 1_000L
-        val shouldPreload = PlayerNextEpisodeRules.shouldShowNextEpisodeCard(
-            positionMs = positionMs + preloadLeadMs,
-            durationMs = effectiveDuration,
-            skipIntervals = skipIntervals,
-            thresholdMode = nextEpisodeThresholdModeSetting,
-            thresholdPercent = nextEpisodeThresholdPercentSetting,
-            thresholdMinutesBeforeEnd = nextEpisodeThresholdMinutesBeforeEndSetting
-        )
-        if (shouldPreload) {
-            preloadNextEpisodeSources()
-        }
+    // Preload: fetch the next episode's sources as soon as this one plays (fork: not only near the
+    // end), so skipping ahead finds them ready. retainPlayerStreamSearches keeps them until exit.
+    if (!nextEpisodePreloadTriggered && state.nextEpisode != null) {
+        preloadNextEpisodeSources()
     }
 
     val shouldShow = PlayerNextEpisodeRules.shouldShowNextEpisodeCard(

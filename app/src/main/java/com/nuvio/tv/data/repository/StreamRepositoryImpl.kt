@@ -84,6 +84,10 @@ class StreamRepositoryImpl @Inject constructor(
         val debridSettings: DebridSettings
     )
 
+    override fun retainStreamSearches(targets: Set<com.nuvio.tv.domain.model.StreamSearchTarget>) {
+        streamSearchSessions.retain(targets)
+    }
+
     override fun getStreamsFromAllAddons(
         type: String,
         videoId: String,

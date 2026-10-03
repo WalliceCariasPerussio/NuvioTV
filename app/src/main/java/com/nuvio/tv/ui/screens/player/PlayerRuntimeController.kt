@@ -770,6 +770,7 @@ class PlayerRuntimeController(
         sourceStreamsScope = null
         episodeStreamsScope?.cancel()
         episodeStreamsScope = null
+        releasePlayerStreamSearches()
     }
 
 }
