@@ -980,6 +980,15 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
                 subtitleDisabledByPersistedPreference = true
                 disableSubtitles()
                 updatedSubtitleIndex = -1
+            } else if (subtitleTracks.isEmpty()) {
+                // Fork: no tracks yet (a new player, e.g. the next episode): turn subtitles off now
+                // and keep the choice until the tracks arrive, instead of dropping it.
+                Log.d(PlayerRuntimeController.TAG, "TRACK_PREF restore: subtitle disabled before tracks, deferred")
+                autoSubtitleSelected = true
+                isUserExplicitSubtitleSelection = true
+                subtitleDisabledByPersistedPreference = true
+                disableSubtitles()
+                updatedSubtitleIndex = -1
             } else {
                 Log.d(PlayerRuntimeController.TAG, "TRACK_PREF restore: subtitle already disabled, clearing")
                 autoSubtitleSelected = true
