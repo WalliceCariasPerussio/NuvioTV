@@ -253,8 +253,8 @@ private fun EpisodeStreamsView(
     }
 
     var trackedFirstStreamKey by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(firstStreamKey, uiState.episodeSelectedAddonFilter, listHasFocus) {
-        if (uiState.episodeSelectedAddonFilter != null) {
+    LaunchedEffect(firstStreamKey, selectedLanguageName, listHasFocus) {
+        if (selectedLanguageName != null) {
             trackedFirstStreamKey = firstStreamKey
             return@LaunchedEffect
         }
@@ -439,6 +439,7 @@ private fun EpisodeStreamsView(
 
                         if (event.key == androidx.compose.ui.input.key.Key.DirectionDown) {
                             userMovedFromFirstResult = true
+                            audioQualityChips.keepSelection() // fork
                         }
 
                         if (orderedAddonNames.isEmpty()) return@onKeyEvent false

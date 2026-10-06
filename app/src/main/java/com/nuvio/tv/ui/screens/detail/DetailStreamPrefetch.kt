@@ -108,6 +108,9 @@ class DetailStreamPrefetchViewModel @Inject constructor(
             delay(PrefetchDebounceMs)
             var latest: List<AddonStreams> = emptyList()
             var error = false
+            // The player pauses local plugins while it plays and they hold the search until resumed.
+            // Out here nothing is playing, so they run (the player may have just left them paused).
+            streamRepository.setLocalPluginSearchPaused(false)
             streamRepository.getStreamsFromAllAddons(
                 type = request.type,
                 videoId = request.videoId,

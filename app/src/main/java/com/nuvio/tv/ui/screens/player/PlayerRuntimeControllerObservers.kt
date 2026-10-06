@@ -920,7 +920,7 @@ internal fun PlayerRuntimeController.handleVc1PlaybackFailure(errorMessage: Stri
     errorRetryJob = null
     releasePlayer(flushPlaybackState = false)
     cancelNextEpisodeAutoPlayOnFatalError()
-    if (tryAutoSourceFailover(displayMessage)) return // fork
+    if (tryAutoSourceFailover(displayMessage, showSwitchToMpv = true)) return // fork
     _uiState.update {
         it.copy(
             error = displayMessage,

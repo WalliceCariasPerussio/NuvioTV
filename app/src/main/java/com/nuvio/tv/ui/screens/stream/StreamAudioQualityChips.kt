@@ -15,22 +15,25 @@ import com.nuvio.tv.domain.model.Stream
 // Audio language and quality chips that replace the addon chips on the stream screen.
 // The choice travels through StreamScreenUiState.selectedAddonFilter as an encoded key
 // ("audio:pt-br|quality:FHD_1080"), so the ViewModel's paging keeps working unchanged:
-// it only swaps the addon-name comparison for matchesStreamFilter.
+// it only swaps the addon-name comparison for matchesStreamFilter. A key the user picked ends in
+// "|user", so the automatic default never replaces it, even after the panel showing it reopens.
 
 private const val FilterKeyPrefix = "audio:"
 private const val QualitySeparator = "|quality:"
+private const val UserChoiceSuffix = "|user"
 internal const val StreamFilterAll = "all"
 
-internal data class StreamFilterKey(val language: String, val quality: String) {
-    fun encode(): String = "$FilterKeyPrefix$language$QualitySeparator$quality"
+internal data class StreamFilterKey(val language: String, val quality: String, val userChosen: Boolean = false) {
+    fun encode(): String = "$FilterKeyPrefix$language$QualitySeparator$quality${if (userChosen) UserChoiceSuffix else ""}"
 
     companion object {
         fun decode(raw: String?): StreamFilterKey? {
             if (raw == null || !raw.startsWith(FilterKeyPrefix)) return null
-            val body = raw.removePrefix(FilterKeyPrefix)
+            val body = raw.removePrefix(FilterKeyPrefix).removeSuffix(UserChoiceSuffix)
             return StreamFilterKey(
                 language = body.substringBefore(QualitySeparator),
                 quality = body.substringAfter(QualitySeparator, StreamFilterAll),
+                userChosen = raw.endsWith(UserChoiceSuffix),
             )
         }
     }
@@ -58,6 +61,10 @@ internal class StreamAudioQualityChipState(
     val selectedQualityName: String?,
     val selectLanguage: (String?) -> Unit,
     val selectQuality: (String?) -> Unit,
+    /** The language and quality chosen, without counts: changes only when the filter does. */
+    val filterKey: String?,
+    /** The user moved through the list: keep this filter instead of following the default. */
+    val keepSelection: () -> Unit,
 )
 
 @Composable
@@ -70,7 +77,7 @@ internal fun rememberStreamAudioQualityChipState(
     val portuguese = stringResource(R.string.stream_filter_language_portuguese)
     val unknown = stringResource(R.string.stream_filter_language_unknown)
     val otherQuality = stringResource(R.string.stream_filter_quality_other)
-    // Auto (preferred language + best quality) until the user picks a chip.
+    // Auto (preferred language + best quality) until the user picks a chip or browses the list.
     var userChose by rememberSaveable { mutableStateOf(false) }
 
     val traits = remember(allStreams) { allStreams.map { it.streamTraits() } }
@@ -87,6 +94,8 @@ internal fun rememberStreamAudioQualityChipState(
         preferredKeys + keysByCount.filterNot { it in preferredKeys }
 
     val current = StreamFilterKey.decode(selectedFilter)
+    // Picked before this panel was (re)opened: the key remembers it.
+    val chosen = userChose || current?.userChosen == true
     val selectedLanguage = current?.language ?: StreamFilterAll
     val languageTraits = traits.filter { streamTraits ->
         when (selectedLanguage) {
@@ -132,8 +141,8 @@ internal fun rememberStreamAudioQualityChipState(
         }
         StreamFilterKey(language, bestQuality(language))
     }
-    LaunchedEffect(defaultKey, userChose, allStreams.isEmpty()) {
-        if (!userChose && allStreams.isNotEmpty() && current != defaultKey) {
+    LaunchedEffect(defaultKey, chosen, allStreams.isEmpty()) {
+        if (!chosen && allStreams.isNotEmpty() && current != defaultKey) {
             onFilterSelected(defaultKey.encode())
         }
     }
@@ -148,13 +157,15 @@ internal fun rememberStreamAudioQualityChipState(
             userChose = true
             val language = name?.let { languageKeys.getOrNull(languageNames.indexOf(it)) } ?: StreamFilterAll
             // A new language starts on its best quality, like the first opening.
-            onFilterSelected(StreamFilterKey(language, bestQuality(language)).encode())
+            onFilterSelected(StreamFilterKey(language, bestQuality(language), userChosen = true).encode())
         },
         selectQuality = { name ->
             userChose = true
             val quality = name?.let { qualityCounts.getOrNull(qualityNames.indexOf(it))?.first?.name } ?: StreamFilterAll
-            onFilterSelected(StreamFilterKey(selectedLanguage, quality).encode())
+            onFilterSelected(StreamFilterKey(selectedLanguage, quality, userChosen = true).encode())
         },
+        filterKey = current?.copy(userChosen = false)?.encode(),
+        keepSelection = { userChose = true },
     )
 }
 

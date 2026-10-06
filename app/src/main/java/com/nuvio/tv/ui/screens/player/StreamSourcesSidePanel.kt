@@ -156,8 +156,8 @@ internal fun StreamSourcesSidePanel(
 
     // When on "All" tab and new results arrive above the focused stream, move focus to the new first item.
     var trackedFirstStreamKey by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(firstStreamKey, uiState.sourceSelectedAddonFilter, listHasFocus) {
-        if (uiState.sourceSelectedAddonFilter != null) {
+    LaunchedEffect(firstStreamKey, selectedLanguageName, listHasFocus) {
+        if (selectedLanguageName != null) {
             trackedFirstStreamKey = firstStreamKey
             return@LaunchedEffect
         }
@@ -394,6 +394,7 @@ internal fun StreamSourcesSidePanel(
 
                                 if (event.key == Key.DirectionDown) {
                                     userMovedFromFirstResult = true
+                                    audioQualityChips.keepSelection() // fork
                                 }
 
                                 if (orderedAddonNames.isEmpty()) return@onKeyEvent false
@@ -460,8 +461,8 @@ internal fun StreamSourcesSidePanel(
                                     }
                                 },
                                 onUpKey = if (index == 0 && chipFocusRequesters.isNotEmpty()) {{
-                                    val idx = if (uiState.sourceSelectedAddonFilter == null) 1
-                                              else orderedAddonNames.indexOf(uiState.sourceSelectedAddonFilter) + 2
+                                    val idx = if (selectedLanguageName == null) 1
+                                              else orderedAddonNames.indexOf(selectedLanguageName) + 2
                                     requestChipFocus(idx)
                                 }} else null
                             )

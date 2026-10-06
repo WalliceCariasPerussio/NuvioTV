@@ -32,6 +32,9 @@ internal fun PlayerRuntimeController.retainPlayerStreamSearches() {
 
 internal fun PlayerRuntimeController.releasePlayerStreamSearches() {
     streamRepository.retainStreamSearches(emptySet())
+    // Leaving the player: local plugins run again (it pauses them during playback), so a search
+    // shared with the screens behind it (details, next episode preloaded) can complete.
+    streamRepository.setLocalPluginSearchPaused(false)
 }
 
 /** A failed stream may come from a stale search, so the sources panel searches again. */

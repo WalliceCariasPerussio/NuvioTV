@@ -8,6 +8,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.domain.model.StreamDebridCacheState
 import com.nuvio.tv.domain.model.StreamDebridCacheStatus
+import com.nuvio.tv.ui.screens.stream.StreamQualityBucket
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -336,6 +337,60 @@ class StreamAutoPlaySelectorTest {
 
         assertEquals(listOf(regular, cachedDebrid), ordered)
     }
+
+    @Test
+    fun `best preferred audio tries the secondary language when the primary is only above the cap`() {
+        val portuguese4k = stream(addonName = "AddonA", url = "https://example.com/ptbr-4k.mkv", name = "2160p 🇧🇷")
+        val english1080 = stream(addonName = "AddonA", url = "https://example.com/en-1080.mkv", name = "1080p 🇬🇧")
+
+        val selected = selectBestPreferredAudio(
+            streams = listOf(portuguese4k, english1080),
+            preferredLanguages = listOf("pt-br", "en")
+        )
+
+        assertEquals(english1080, selected)
+    }
+
+    @Test
+    fun `best preferred audio without preferred languages plays the best quality within the cap in any language`() {
+        val japanese720 = stream(addonName = "AddonA", url = "https://example.com/ja-720.mkv", name = "720p 🇯🇵")
+        val english1080 = stream(addonName = "AddonA", url = "https://example.com/en-1080.mkv", name = "1080p 🇬🇧")
+        val english4k = stream(addonName = "AddonA", url = "https://example.com/en-4k.mkv", name = "2160p 🇬🇧")
+
+        val selected = selectBestPreferredAudio(
+            streams = listOf(japanese720, english1080, english4k),
+            preferredLanguages = emptyList()
+        )
+
+        assertEquals(english1080, selected)
+    }
+
+    @Test
+    fun `best preferred audio reads side by side flags in pairs`() {
+        // UK + Russia flags hold B+R (Brazil) across them: not a PT-BR release.
+        val englishRussian = stream(addonName = "AddonA", url = "https://example.com/en-ru.mkv", name = "1080p 🇬🇧🇷🇺")
+        val portuguese720 = stream(addonName = "AddonA", url = "https://example.com/ptbr-720.mkv", name = "720p 🇧🇷")
+
+        val selected = selectBestPreferredAudio(
+            streams = listOf(englishRussian, portuguese720),
+            preferredLanguages = listOf("pt-br")
+        )
+
+        assertEquals(portuguese720, selected)
+    }
+
+    private fun selectBestPreferredAudio(streams: List<Stream>, preferredLanguages: List<String>): Stream? =
+        StreamAutoPlaySelector.selectAutoPlayStream(
+            streams = streams,
+            mode = StreamAutoPlayMode.BEST_PREFERRED_AUDIO,
+            regexPattern = "",
+            source = StreamAutoPlaySource.ALL_SOURCES,
+            installedAddonNames = setOf("AddonA"),
+            selectedAddons = emptySet(),
+            selectedPlugins = emptySet(),
+            preferredLanguages = preferredLanguages,
+            maxQuality = StreamQualityBucket.FHD_1080
+        )
 
     private fun stream(
         addonName: String,

@@ -90,11 +90,15 @@ internal fun SourceScopeChips(
     }
 }
 
-/** "Todos" scope of the audio panel: one row per language found in the sources. */
+/**
+ * "Todos" scope of the audio panel: one row per language found in the sources. [focusRequester]
+ * goes on the language playing (else the first one), the target of Left from the audio controls.
+ */
 @Composable
 internal fun SourceLanguageOptionsContent(
     scope: SourceAudioScope,
     rightFocusRequester: FocusRequester?,
+    focusRequester: FocusRequester? = null,
 ) {
     val languages = scope.options.languages
     if (languages.isEmpty()) {
@@ -105,6 +109,7 @@ internal fun SourceLanguageOptionsContent(
         )
         return
     }
+    val focusKey = (languages.firstOrNull { it.isCurrent } ?: languages.first()).key
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         contentPadding = PaddingValues(top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.sm),
@@ -120,6 +125,7 @@ internal fun SourceLanguageOptionsContent(
                     stringResource(R.string.player_source_tracks_best_quality, qualityLabel(it), count)
                 } ?: count,
                 isCurrent = option.isCurrent,
+                focusRequester = focusRequester?.takeIf { option.key == focusKey },
                 rightFocusRequester = rightFocusRequester,
                 onClick = { scope.onLanguageSelected(option.key) },
             )

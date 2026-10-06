@@ -308,6 +308,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
             }
         }
         sourceStreamsFetchCompleted = true
+        onSourceListCompleted() // fork
         markRemainingSourceChipsAsError()
     }
 }
@@ -1821,9 +1822,10 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             }
             // Fork: BEST_PREFERRED_AUDIO keeps the language playing now (like Netflix), then the
             // preferred ones, within the quality cap.
+            val nextEpisodePreferredLanguages = playerSettings.autoPlayAudioLanguages(contentLanguage)
             val nextEpisodeLanguages = (
-                listOfNotNull(_uiState.value.currentAudioLanguage()) +
-                    playerSettings.autoPlayAudioLanguages()
+                listOfNotNull(_uiState.value.currentAudioLanguage(nextEpisodePreferredLanguages)) +
+                    nextEpisodePreferredLanguages
                 ).distinct()
             val nextEpisodeMaxQuality = playerSettings.streamAutoPlayMaxQuality.bucket
             var selectedStream: Stream? = null
@@ -1982,6 +1984,7 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
                         playbackEnded = false,
                     )
                 }
+                forgetManualSourcePick() // fork: this source was picked automatically
                 switchToEpisodeStream(
                     stream = streamToPlay,
                     forcedTargetVideo = nextVideo,

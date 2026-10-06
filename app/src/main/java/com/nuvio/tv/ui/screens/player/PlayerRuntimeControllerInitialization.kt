@@ -1665,7 +1665,6 @@ internal fun PlayerRuntimeController.initializePlayer(
                         // Fatal error: stop any next-episode auto-play that may have been
                         // armed by a short placeholder ENDED or residual post-play state.
                         cancelNextEpisodeAutoPlayOnFatalError()
-                        if (tryAutoSourceFailover(detailedError)) return // fork
                         val canSwitchToMpvOnFatal = currentInternalPlayerEngine != InternalPlayerEngine.MVP_PLAYER &&
                             (error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
                              error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
@@ -1673,6 +1672,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                              error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ||
                              error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
                              error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED)
+                        if (tryAutoSourceFailover(detailedError, canSwitchToMpvOnFatal)) return // fork
                         _uiState.update {
                             it.copy(
                                 error = detailedError,

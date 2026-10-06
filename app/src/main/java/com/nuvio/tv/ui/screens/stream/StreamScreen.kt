@@ -468,7 +468,7 @@ fun StreamScreen(
                             val playbackInfo = viewModel.resolveStreamForPlayback(stream)
                             if (playbackInfo != null) {
                                 pendingRestoreOnResume = true
-                                routePlayback(playbackInfo)
+                                routePlayback(playbackInfo.copy(manualSourcePick = true)) // fork
                                 viewModel.onEvent(StreamScreenEvent.OnAutoPlayConsumed)
                             }
                         }
@@ -810,8 +810,8 @@ private fun RightStreamSection(
     }
     // When on "All" tab and new results arrive above the focused stream, move focus to the new first item.
     var trackedFirstStreamKey by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(firstStreamKey, selectedAddonFilter, listHasFocus) {
-        if (selectedAddonFilter != null) {
+    LaunchedEffect(firstStreamKey, selectedLanguageName, listHasFocus) {
+        if (selectedLanguageName != null) {
             trackedFirstStreamKey = firstStreamKey
             return@LaunchedEffect
         }
@@ -932,6 +932,7 @@ private fun RightStreamSection(
                             firstStreamFocusRequestId = firstStreamFocusRequestId,
                             availableAddons = availableAddons,
                             selectedAddonFilter = selectedLanguageName,
+                            scrollResetKey = audioQualityChips.filterKey, // fork: without the counts
                             showFileSizeBadges = showFileSizeBadges,
                             showAddonLogo = showAddonLogo,
                             badgePlacement = badgePlacement,
@@ -941,6 +942,7 @@ private fun RightStreamSection(
                             onRequestChipFocus = { requestChipFocus(it) },
                             onUserNavigatedFromFirstResult = {
                                 userMovedFromFirstResult = true
+                                audioQualityChips.keepSelection() // fork
                             },
                             onFocusChanged = { listHasFocus = it },
                             onExpandStreams = onExpandStreams
@@ -1050,6 +1052,7 @@ private fun StreamsList(
     firstStreamFocusRequestId: Int = 0,
     availableAddons: List<String> = emptyList(),
     selectedAddonFilter: String? = null,
+    scrollResetKey: String? = selectedAddonFilter,
     showFileSizeBadges: Boolean = true,
     showAddonLogo: Boolean = true,
     badgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
@@ -1106,7 +1109,7 @@ private fun StreamsList(
     }
 
     // Reset scroll position to the top when the addon filter changes (#2538).
-    LaunchedEffect(selectedAddonFilter) {
+    LaunchedEffect(scrollResetKey) {
         streamListState.scrollToItem(0)
     }
 

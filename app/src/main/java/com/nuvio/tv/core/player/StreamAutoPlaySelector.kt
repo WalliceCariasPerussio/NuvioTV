@@ -32,7 +32,7 @@ object StreamAutoPlaySelector {
         return directDebridEntries + orderedAddons + pluginEntries
     }
 
-    private fun isPlayable(stream: Stream): Boolean {
+    internal fun isPlayable(stream: Stream): Boolean { // fork: shared with the player's automatic picks
         // External URL streams (e.g. error pages, web links) are not playable.
         if (stream.isExternal()) return false
         when (stream.debridCacheStatus?.state) {

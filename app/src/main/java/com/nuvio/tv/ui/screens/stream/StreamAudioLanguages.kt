@@ -151,13 +151,39 @@ private fun Stream.detectAudioLanguages(): List<String> {
             val trimmed = line.trimStart()
             trimmed.startsWith(SubtitleMarker) || trimmed.startsWith(OtherTracksMarker)
         }
-        .flatMap { line -> FlagLanguages.filterKeys { flag -> flag in line }.values }
+        .flatMap { line -> flagsIn(line).mapNotNull(FlagLanguages::get) }
         .distinct()
     if (flagged.isNotEmpty()) return flagged
 
     val text = listOfNotNull(name, title, behaviorHints?.filename).joinToString(" ").lowercase()
     if (WithoutPtBrPattern.containsMatchIn(text)) return emptyList()
     return if (DubbedPtBrPattern.containsMatchIn(text)) listOf("pt-br") else emptyList()
+}
+
+/**
+ * Flags of [line], in order. A flag is a pair of regional indicator letters, read in aligned pairs:
+ * two flags side by side hold a false one across them (🇬🇧🇷🇺 has B+R, Brazil, in the middle).
+ */
+private fun flagsIn(line: String): List<String> {
+    val flags = mutableListOf<String>()
+    var pending: Int? = null
+    var index = 0
+    while (index < line.length) {
+        val codePoint = line.codePointAt(index)
+        index += Character.charCount(codePoint)
+        if (codePoint !in 0x1F1E6..0x1F1FF) {
+            pending = null
+            continue
+        }
+        val first = pending
+        if (first == null) {
+            pending = codePoint
+        } else {
+            flags += String(intArrayOf(first, codePoint), 0, 2)
+            pending = null
+        }
+    }
+    return flags
 }
 
 private fun Stream.detectQuality(): StreamQualityBucket {

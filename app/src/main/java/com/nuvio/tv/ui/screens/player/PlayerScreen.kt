@@ -1632,6 +1632,10 @@ fun PlayerScreen(
             }
         }
 
+        // Fork: closing the audio/quality panel (any way) stops the source search it started.
+        LaunchedEffect(uiState.showAudioOverlay) {
+            if (!uiState.showAudioOverlay) viewModel.controller.releaseSourceTrackPanelSearch()
+        }
         // Fork: languages and qualities of every source, for the audio panel's "Todos" and the quality panel.
         val sourceTrackOptions = remember(
             uiState.sourceAllStreams,

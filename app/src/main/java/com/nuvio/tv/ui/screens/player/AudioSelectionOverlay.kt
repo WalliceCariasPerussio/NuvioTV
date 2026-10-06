@@ -198,6 +198,8 @@ internal fun AudioSelectionOverlay(
                         SourceLanguageOptionsContent(
                             scope = sourceAudio,
                             rightFocusRequester = null,
+                            // Left from the controls lands on the languages, as on the tracks.
+                            focusRequester = tracksFocusRequester,
                         )
                     } else AudioTracksContent(
                         tracks = tracks,
@@ -232,7 +234,11 @@ internal fun AudioSelectionOverlay(
                         centerMinusFocusRequester = centerMinusFocusRequester,
                         centerPlusFocusRequester = centerPlusFocusRequester,
                         persistFocusRequester = persistFocusRequester,
-                        leftFocusRequester = tracksFocusRequester,
+                        leftFocusRequester = if (showAllSources && sourceAudio?.options?.languages?.isEmpty() == true) {
+                            FocusRequester.Default // fork: "Todos" still loading, no language card yet
+                        } else {
+                            tracksFocusRequester
+                        },
                         onAudioDelayChange = onAudioDelayChange,
                         onAmplificationChange = { nextDb, focusTarget ->
                             pendingControlFocusTarget = focusTarget

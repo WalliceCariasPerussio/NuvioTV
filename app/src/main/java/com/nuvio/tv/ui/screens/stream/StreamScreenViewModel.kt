@@ -47,6 +47,7 @@ import com.nuvio.tv.domain.repository.WatchProgressRepository
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
 import com.nuvio.tv.ui.screens.player.StreamSidecarSubtitles
+import com.nuvio.tv.ui.screens.player.sameLanguage
 import com.nuvio.tv.ui.util.localizedGenreLabel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -479,11 +480,16 @@ class StreamScreenViewModel @Inject constructor(
                 contentId?.let { bingeGroupCacheDataStore.get(it) }
             } else null
             // Fork: language and quality cap for the BEST_PREFERRED_AUDIO mode. Like Netflix, the
-            // audio language last chosen for this title comes before the preferred ones.
+            // audio language last chosen for this title comes before the preferred ones. It is a
+            // track tag: a bare "pt" (from "por") is the preferred "pt-br" when that one is preferred.
+            val preferredAutoPlayLanguages = playerSettings.autoPlayAudioLanguages(contentLanguage)
             val titleAudioLanguage = contentId
                 ?.let { runCatching { trackPreferenceDataStore.load(it) }.getOrNull()?.audioLanguage }
                 ?.let(::streamLanguageCode)
-            val autoPlayLanguages = (listOfNotNull(titleAudioLanguage) + playerSettings.autoPlayAudioLanguages()).distinct()
+                ?.let { code ->
+                    preferredAutoPlayLanguages.firstOrNull { '-' !in code && sameLanguage(it, code) } ?: code
+                }
+            val autoPlayLanguages = (listOfNotNull(titleAudioLanguage) + preferredAutoPlayLanguages).distinct()
             val autoPlayMaxQuality = playerSettings.streamAutoPlayMaxQuality.bucket
 
             fun applySuccess(addonStreamGroups: List<AddonStreams>, isAllLoaded: Boolean) {
@@ -1992,7 +1998,9 @@ data class StreamPlaybackInfo(
     val streamDescription: String? = null,
     val fileIdx: Int? = null,
     val sources: List<String>? = null,
-    val contentLanguage: String? = null
+    val contentLanguage: String? = null,
+    // Fork: picked by hand in the list, not by autoplay (the player's source failover leaves it alone).
+    val manualSourcePick: Boolean = false
 )
 
 private fun playbackUrlFor(playbackInfo: StreamPlaybackInfo): String? =

@@ -597,6 +597,7 @@ private fun PlaybackNavHost(
                                 episodeTitle = playbackInfo.episodeTitle,
                                 bingeGroup = playbackInfo.bingeGroup,
                                 autoPlayNav = false,
+                                manualSourcePick = playbackInfo.manualSourcePick, // fork
                                 returnToDetailOnBack = returnToDetailOnBack,
                                 returnToHomeOnBack = returnToHomeOnBack,
                                 filename = playbackInfo.filename,
@@ -805,6 +806,11 @@ private fun PlaybackNavHost(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                navArgument("manualSourcePick") { // fork
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = "false"
                 }
             )
         ) { backStackEntry ->

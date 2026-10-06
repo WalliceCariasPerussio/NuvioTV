@@ -38,7 +38,8 @@ internal class StreamSearchSessionCache(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val nowMs: () -> Long = System::currentTimeMillis,
     private val completedTtlMs: Long = DEFAULT_COMPLETED_TTL_MS,
-    private val maxEntries: Int = DEFAULT_MAX_ENTRIES
+    private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
+    private val retainedTtlMs: Long = DEFAULT_RETAINED_TTL_MS
 ) {
     private data class Snapshot(
         val result: NetworkResult<List<AddonStreams>>,
@@ -57,7 +58,8 @@ internal class StreamSearchSessionCache(
 
     private val mutex = Mutex()
     private val sessions = LinkedHashMap<StreamSearchRequestKey, Session>(16, 0.75f, true)
-    // Searches the player keeps while it is open (current and next episode): never expired or trimmed.
+    // Searches the player keeps while it is open (current and next episode): never trimmed, and
+    // expired only after retainedTtlMs (a player paused for hours would otherwise reuse dead links).
     private val retained = java.util.concurrent.ConcurrentHashMap.newKeySet<StreamSearchTarget>()
 
     fun retain(targets: Set<StreamSearchTarget>) {
@@ -204,9 +206,9 @@ internal class StreamSearchSessionCache(
         val iterator = sessions.entries.iterator()
         while (iterator.hasNext()) {
             val (key, session) = iterator.next()
-            if (key.isRetained()) continue
             val completedAt = session.completedAtMs ?: continue
-            if (now - completedAt >= completedTtlMs) {
+            val ttlMs = if (key.isRetained()) retainedTtlMs else completedTtlMs
+            if (now - completedAt >= ttlMs) {
                 iterator.remove()
                 session.cancelAndComplete()
             }
@@ -237,5 +239,6 @@ internal class StreamSearchSessionCache(
     private companion object {
         const val DEFAULT_COMPLETED_TTL_MS = 15 * 60 * 1_000L
         const val DEFAULT_MAX_ENTRIES = 12
+        const val DEFAULT_RETAINED_TTL_MS = 2 * 60 * 60 * 1_000L
     }
 }

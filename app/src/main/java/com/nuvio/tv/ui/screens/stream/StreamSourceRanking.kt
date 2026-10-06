@@ -86,10 +86,11 @@ private class RankedStream(val stream: Stream, val key: List<Int>, val size: Lon
 
 /**
  * Autoplay "best in my language": the preferred language, else the secondary one; within the cap.
- * Null when neither language has a source within the cap, so the source list opens instead (a
- * language only found above the cap is not played automatically: 4K stays a manual choice).
- * With [preferredBingeGroup] / [preferredAddon] (the source playing, for the next episode), that
- * source comes first within the language and the cap, before a better quality elsewhere.
+ * Null when no language has a source within the cap, so the source list opens instead (a language
+ * only found above the cap is not played automatically: 4K stays a manual choice). No preferred
+ * language at all means any language. With [preferredBingeGroup] / [preferredAddon] (the source
+ * playing, for the next episode), that source comes first within the language and the cap, before
+ * a better quality elsewhere.
  */
 internal fun selectBestInPreferredLanguage(
     streams: List<Stream>,
@@ -98,29 +99,32 @@ internal fun selectBestInPreferredLanguage(
     preferredBingeGroup: String? = null,
     preferredAddon: String? = null,
 ): Stream? {
-    for (language in preferredLanguages) {
-        val inLanguage = rankSourceStreams(
+    for (language in preferredLanguages.ifEmpty { listOf(null) }) {
+        // Ranked within the cap first, so the best one within it leads the list.
+        val withinCap = rankSourceStreams(
             streams,
-            SourceRanking(language, maxQuality, strictCap = false, preferredBingeGroup, preferredAddon),
+            SourceRanking(language, maxQuality, strictCap = true, preferredBingeGroup, preferredAddon),
         )
-        if (inLanguage.isEmpty()) continue
-        val withinCap = inLanguage.filter { it.streamTraits().quality.isWithin(maxQuality) }
+        // Only above the cap in this language: try the next one.
+        if (withinCap.isEmpty()) continue
         // Same release as the episode before, else the same addon: what the user was watching.
         val continuing = preferredBingeGroup?.let { group -> withinCap.firstOrNull { it.behaviorHints?.bingeGroup == group } }
             ?: preferredAddon?.let { addon -> withinCap.firstOrNull { it.addonName == addon } }
-        return continuing ?: inLanguage.first().takeIf { it.streamTraits().quality.isWithin(maxQuality) }
+        return continuing ?: withinCap.first()
     }
     return null
 }
 
 /**
- * True when [stream] can't be beaten by sources still loading: preferred language, at the cap
- * quality (no cap: never) and a ready link. Lets autoplay start before every addon answers.
+ * True when [stream] can't be beaten by sources still loading: preferred language (no preferred
+ * language: any), at the cap quality (no cap: never) and a ready link. Lets autoplay start before
+ * every addon answers.
  */
 internal fun isUnbeatableChoice(stream: Stream, preferredLanguage: String?, maxQuality: StreamQualityBucket?): Boolean {
-    if (maxQuality == null || preferredLanguage == null) return false
+    if (maxQuality == null) return false
     val traits = stream.streamTraits()
-    return preferredLanguage in traits.audioLanguages && traits.quality == maxQuality && stream.isReadyLink()
+    return (preferredLanguage == null || preferredLanguage in traits.audioLanguages) &&
+        traits.quality == maxQuality && stream.isReadyLink()
 }
 
 /** Preferred audio languages for automatic choices, as source-list codes (primary, secondary). */
