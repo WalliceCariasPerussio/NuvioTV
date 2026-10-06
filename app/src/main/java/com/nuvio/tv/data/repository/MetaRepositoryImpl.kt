@@ -189,7 +189,7 @@ class MetaRepositoryImpl @Inject constructor(
                 try {
                     val response = api.getMeta(url)
                     if (response.isSuccessful) {
-                        val metaDto = response.body()?.meta ?: return@async null
+                        val metaDto = response.body()?.meta?.takeUnless { it.isAddonErrorPlaceholder() } ?: return@async null
                         val meta = metaDto.toDomain(context.getString(R.string.episodes_episode))
                         val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
                         val cached = CachedMeta(meta, System.currentTimeMillis() + ttlMs)
@@ -311,7 +311,7 @@ class MetaRepositoryImpl @Inject constructor(
                 try {
                     val response = api.getMeta(url)
                     if (response.isSuccessful) {
-                        val metaDto = response.body()?.meta
+                        val metaDto = response.body()?.meta?.takeUnless { it.isAddonErrorPlaceholder() }
                         if (metaDto != null) {
                             val episodeLabel = context.getString(R.string.episodes_episode)
                             val meta = metaDto.toDomain(episodeLabel)
@@ -399,7 +399,7 @@ class MetaRepositoryImpl @Inject constructor(
                         try {
                             val response = api.getMeta(url)
                             if (response.isSuccessful) {
-                                val metaDto = response.body()?.meta
+                                val metaDto = response.body()?.meta?.takeUnless { it.isAddonErrorPlaceholder() }
                                 if (metaDto != null) {
                                     val meta = metaDto.toDomain(context.getString(R.string.episodes_episode))
                                     val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
@@ -517,7 +517,7 @@ class MetaRepositoryImpl @Inject constructor(
                 try {
                     val response = api.getMeta(url)
                     if (response.isSuccessful) {
-                        val metaDto = response.body()?.meta ?: return@async null
+                        val metaDto = response.body()?.meta?.takeUnless { it.isAddonErrorPlaceholder() } ?: return@async null
                         val meta = metaDto.toDomain(context.getString(R.string.episodes_episode))
                         val ttlMs = parseMaxAgeMs(response.headers()["Cache-Control"])
                         val cached = CachedMeta(meta, System.currentTimeMillis() + ttlMs)

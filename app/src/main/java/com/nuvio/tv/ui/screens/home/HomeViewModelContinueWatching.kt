@@ -7,6 +7,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.util.isEpisodeReleaseAired
 import com.nuvio.tv.core.util.parseEpisodeReleaseInstant
 import com.nuvio.tv.core.util.selectEpisodeReleaseValue
+import com.nuvio.tv.data.repository.looksLikeAddonError
 import com.nuvio.tv.domain.model.ContinueWatchingSortMode
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Meta
@@ -420,7 +421,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                     backdrop = cached.backdrop ?: progress.backdrop,
                                     poster = cached.poster ?: progress.poster,
                                     logo = cached.logo ?: progress.logo,
-                                    name = cached.name.takeIf { it.isNotBlank() } ?: progress.name,
+                                    name = cached.name.takeIf { it.isNotBlank() && !it.looksLikeAddonError() } ?: progress.name,
                                     episodeTitle = if (sameEpisode) (cached.episodeTitle ?: progress.episodeTitle) else progress.episodeTitle,
                                     videoId = if (sameEpisode) (cached.videoId.takeIf { it.isNotBlank() } ?: progress.videoId) else progress.videoId
                                 )
@@ -624,7 +625,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                             backdrop = cached.backdrop ?: nextUp.info.backdrop,
                                             poster = cached.poster ?: nextUp.info.poster,
                                             logo = cached.logo ?: nextUp.info.logo,
-                                            name = cached.name.takeIf { it.isNotBlank() } ?: nextUp.info.name,
+                                            name = cached.name.takeIf { it.isNotBlank() && !it.looksLikeAddonError() } ?: nextUp.info.name,
                                             contentLanguage = cached.contentLanguage ?: nextUp.info.contentLanguage
                                         ))
                                     } else nextUp
@@ -1062,7 +1063,7 @@ internal fun HomeViewModel.loadContinueWatchingPipeline() {
                                     backdrop = cached.backdrop ?: nextUp.info.backdrop,
                                     poster = cached.poster ?: nextUp.info.poster,
                                     logo = cached.logo ?: nextUp.info.logo,
-                                    name = cached.name.takeIf { it.isNotBlank() } ?: nextUp.info.name,
+                                    name = cached.name.takeIf { it.isNotBlank() && !it.looksLikeAddonError() } ?: nextUp.info.name,
                                     episodeDescription = cached.episodeDescription ?: nextUp.info.episodeDescription,
                                     imdbRating = cached.imdbRating ?: nextUp.info.imdbRating,
                                     genres = cached.genres.ifEmpty { nextUp.info.genres },

@@ -7,6 +7,7 @@ import com.nuvio.tv.data.local.CachedNextUpItem
 import com.nuvio.tv.data.local.ContinueWatchingEnrichmentCache
 import com.nuvio.tv.data.local.LayoutPreferenceDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
+import com.nuvio.tv.data.repository.looksLikeAddonError
 import com.nuvio.tv.core.recommendations.TvRecommendationManager
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
@@ -183,6 +184,8 @@ class AndroidTvChannelSyncService @Inject constructor(
             .sortedByDescending { it.sortKey }
             .map { it.watchProgress }
             .distinctBy { it.contentId }
+            // A cached title can still be an addon error message from before it was filtered.
+            .filterNot { it.name.looksLikeAddonError() }
     }
 
     private fun nextUpDismissKey(item: CachedNextUpItem): String {
