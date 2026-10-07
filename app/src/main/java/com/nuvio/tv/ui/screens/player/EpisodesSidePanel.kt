@@ -111,6 +111,8 @@ internal fun EpisodesSidePanel(
         }
     }
 
+    var panelHasFocus by remember { mutableStateOf(false) } // fork
+
     // Right panel only (scrim is handled in PlayerScreen)
     Box(
         modifier = modifier
@@ -118,6 +120,7 @@ internal fun EpisodesSidePanel(
             .width(520.dp)
             .clip(RoundedCornerShape(topStart = NuvioTheme.spacing.lg, bottomStart = NuvioTheme.spacing.lg))
             .background(NuvioTheme.colors.BackgroundElevated)
+            .onFocusChanged { panelHasFocus = it.hasFocus }
     ) {
         Column(modifier = Modifier.padding(NuvioTheme.spacing.xl)) {
                 Row(
@@ -144,6 +147,7 @@ internal fun EpisodesSidePanel(
                     EpisodeStreamsView(
                         uiState = uiState,
                         playerSettings = playerSettings,
+                        panelHasFocus = panelHasFocus,
                         onBackToEpisodes = onBackToEpisodes,
                         onReload = onReloadEpisodeStreams,
                         onAddonFilterSelected = onAddonFilterSelected,
@@ -166,6 +170,7 @@ internal fun EpisodesSidePanel(
 private fun EpisodeStreamsView(
     uiState: PlayerUiState,
     playerSettings: com.nuvio.tv.data.local.PlayerSettings?,
+    panelHasFocus: Boolean,
     onBackToEpisodes: () -> Unit,
     onReload: () -> Unit,
     onAddonFilterSelected: (String?) -> Unit,
@@ -275,6 +280,20 @@ private fun EpisodeStreamsView(
             withFrameNanos { }
             if (firstCardHasFocus) return@LaunchedEffect
             runCatching { streamFocusRequesters.getValue(requestedKey).requestFocus() }
+        }
+    }
+
+    // Fork: nothing in the panel had focus (it opened from "próximo", whose button went away, or
+    // the focused source left the list), so the D-pad went nowhere. Take it back: the first
+    // source, else the retry chip, else "Voltar".
+    LaunchedEffect(panelHasFocus, firstStreamKey, uiState.isLoadingEpisodeStreams, uiState.showEpisodesPanel) {
+        if (panelHasFocus || !uiState.showEpisodesPanel) return@LaunchedEffect
+        withFrameNanos { }
+        fun FocusRequester.tryFocus() = runCatching { requestFocus() }.getOrDefault(false)
+        val focusedFirstStream = firstStreamKey != null && !uiState.isLoadingEpisodeStreams &&
+            streamFocusRequesters[firstStreamKey]?.tryFocus() == true
+        if (!focusedFirstStream && !refreshFocusRequester.tryFocus()) {
+            backButtonFocusRequester.tryFocus()
         }
     }
 

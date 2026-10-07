@@ -6,6 +6,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import com.nuvio.tv.domain.model.Subtitle
+import com.nuvio.tv.ui.screens.stream.matchesStreamFilter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -15,7 +16,7 @@ internal fun PlayerRuntimeController.filterEpisodeStreamsByAddon(addonName: Stri
     val filteredStreams = if (addonName == null) {
         allStreams
     } else {
-        allStreams.filter { it.addonName == addonName }
+        allStreams.filter { it.matchesStreamFilter(addonName) } // fork: audio/quality chip key
     }
 
     _uiState.update {

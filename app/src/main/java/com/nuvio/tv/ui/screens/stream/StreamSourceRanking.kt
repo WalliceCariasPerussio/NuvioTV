@@ -116,6 +116,37 @@ internal fun selectBestInPreferredLanguage(
 }
 
 /**
+ * The next episode keeps what was [playing]: the same release (binge group), the same quality
+ * first; else the source with the same name ("AnimesDigital LEG [Blogger] - 720p") from the same
+ * addon, when known; else the same addon in the same quality. Always with the same audio: every language the playing source had,
+ * so a group shared by the dub and the original doesn't swap the language. A source playing
+ * without a known language (resumed from a saved link, which keeps only the name) doesn't rule
+ * any out. Null when the next episode has none of them.
+ */
+internal fun selectContinuation(streams: List<Stream>, playing: Stream): Stream? {
+    val playingTraits = playing.streamTraits()
+    val languages = playingTraits.audioLanguages
+    val candidates = streams.map { it to it.streamTraits() }
+        .filter { (_, traits) -> traits.audioLanguages.containsAll(languages) }
+    fun List<Pair<Stream, StreamTraits>>.sameQualityFirst(): Stream? =
+        (firstOrNull { (_, traits) -> traits.quality == playingTraits.quality } ?: firstOrNull())?.first
+
+    playing.behaviorHints?.bingeGroup?.trim()?.takeIf { it.isNotEmpty() }?.let { group ->
+        candidates.filter { (stream, _) -> stream.behaviorHints?.bingeGroup == group }
+            .sameQualityFirst()?.let { return it }
+    }
+    val addon = playing.addonName.takeIf { it.isNotBlank() }
+    playing.name?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+        candidates.filter { (stream, _) -> stream.name?.trim() == name && (addon == null || stream.addonName == addon) }
+            .sameQualityFirst()?.let { return it }
+    }
+    if (addon == null) return null
+    return candidates.firstOrNull { (stream, traits) ->
+        stream.addonName == addon && traits.quality == playingTraits.quality
+    }?.first
+}
+
+/**
  * True when [stream] can't be beaten by sources still loading: preferred language (no preferred
  * language: any), at the cap quality (no cap: never) and a ready link. Lets autoplay start before
  * every addon answers.

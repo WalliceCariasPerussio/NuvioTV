@@ -9,6 +9,7 @@ import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.domain.model.StreamDebridCacheState
 import com.nuvio.tv.domain.model.StreamDebridCacheStatus
 import com.nuvio.tv.ui.screens.stream.StreamQualityBucket
+import com.nuvio.tv.ui.screens.stream.selectContinuation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -377,6 +378,52 @@ class StreamAutoPlaySelectorTest {
         )
 
         assertEquals(portuguese720, selected)
+    }
+
+    @Test
+    fun `next episode keeps the addon audio and quality playing even outside the preferred language`() {
+        val playing = stream(addonName = "AnimesDigital", url = "https://example.com/e9.m3u8", name = "720p 🇯🇵")
+        val otherAddon1080 = stream(addonName = "Torrentio", url = "https://example.com/t.mkv", name = "1080p 🇯🇵")
+        val sameAddon1080 = stream(addonName = "AnimesDigital", url = "https://example.com/e10-1080.m3u8", name = "1080p 🇯🇵")
+        val sameAddon720 = stream(addonName = "AnimesDigital", url = "https://example.com/e10-720.m3u8", name = "720p 🇯🇵")
+
+        val selected = selectContinuation(listOf(otherAddon1080, sameAddon1080, sameAddon720), playing)
+
+        assertEquals(sameAddon720, selected)
+    }
+
+    @Test
+    fun `next episode resumed from a saved link keeps the source with the same name`() {
+        // A saved link brings only the name: no addon, no audio line.
+        val playing = stream(addonName = "", name = "AnimesDigital LEG [Blogger] - 720p")
+        val leg1080 = stream(addonName = "AnimesDigital", url = "https://example.com/1080.m3u8", name = "AnimesDigital LEG - 1080p\n🔊 Japonês")
+        val blogger = stream(addonName = "AnimesDigital", url = "https://example.com/720.m3u8", name = "AnimesDigital LEG [Blogger] - 720p")
+
+        val selected = selectContinuation(listOf(leg1080, blogger), playing)
+
+        assertEquals(blogger, selected)
+    }
+
+    @Test
+    fun `next episode keeps the binge group without swapping the dub for the original`() {
+        val playing = stream(addonName = "Torrentio", url = "https://example.com/e9.mkv", name = "1080p 🇯🇵", bingeGroup = "torrentio|1080p")
+        val dub = stream(addonName = "Torrentio", url = "https://example.com/dub.mkv", name = "1080p 🇧🇷", bingeGroup = "torrentio|1080p")
+        val original = stream(addonName = "Torrentio", url = "https://example.com/ja.mkv", name = "1080p 🇯🇵", bingeGroup = "torrentio|1080p")
+
+        val selected = selectContinuation(listOf(dub, original), playing)
+
+        assertEquals(original, selected)
+    }
+
+    @Test
+    fun `next episode without the source playing leaves the choice to the language ranking`() {
+        val playing = stream(addonName = "AnimesDigital", url = "https://example.com/e9.m3u8", name = "720p 🇯🇵")
+        val otherAddon = stream(addonName = "Torrentio", url = "https://example.com/t.mkv", name = "720p 🇯🇵")
+        val sameAddonOtherAudio = stream(addonName = "AnimesDigital", url = "https://example.com/dub.m3u8", name = "720p 🇧🇷")
+
+        val selected = selectContinuation(listOf(otherAddon, sameAddonOtherAudio), playing)
+
+        assertNull(selected)
     }
 
     private fun selectBestPreferredAudio(streams: List<Stream>, preferredLanguages: List<String>): Stream? =

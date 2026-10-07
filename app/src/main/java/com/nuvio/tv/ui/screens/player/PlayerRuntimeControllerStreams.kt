@@ -29,6 +29,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.nuvio.tv.ui.screens.stream.matchesStreamFilter
 import com.nuvio.tv.ui.screens.stream.autoPlayAudioLanguages
+import com.nuvio.tv.ui.screens.stream.selectContinuation
+import com.nuvio.tv.ui.screens.stream.streamTraits
 import com.nuvio.tv.ui.screens.stream.bucket
 
 /** Hard ceiling for next-episode stream search to prevent hanging forever. */
@@ -638,6 +640,7 @@ private fun PlayerRuntimeController.applySelectedStreamState(
  * of stream type — critical for next-episode binge matching.
  */
 private fun PlayerRuntimeController.applyStreamMetadata(stream: Stream) {
+    currentPlayingStream = stream // fork
     currentStreamBingeGroup = stream.behaviorHints?.bingeGroup
     currentVideoHash = stream.behaviorHints?.videoHash
     currentVideoSize = stream.behaviorHints?.videoSize
@@ -1820,11 +1823,14 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             } else {
                 playerSettings.streamAutoPlayRegex
             }
-            // Fork: BEST_PREFERRED_AUDIO keeps the language playing now (like Netflix), then the
-            // preferred ones, within the quality cap.
+            // Fork: BEST_PREFERRED_AUDIO keeps the source, audio and quality playing now (like
+            // Netflix); else the language playing (the track's, or the source's when the track
+            // has no tag), then the preferred ones, within the quality cap.
+            val playing = playingStream()
             val nextEpisodePreferredLanguages = playerSettings.autoPlayAudioLanguages(contentLanguage)
             val nextEpisodeLanguages = (
                 listOfNotNull(_uiState.value.currentAudioLanguage(nextEpisodePreferredLanguages)) +
+                    playing.streamTraits().audioLanguages +
                     nextEpisodePreferredLanguages
                 ).distinct()
             val nextEpisodeMaxQuality = playerSettings.streamAutoPlayMaxQuality.bucket
@@ -1840,6 +1846,10 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
             fun trySelectStream(data: List<AddonStreams>): Stream? {
                 val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(data, installedAddonOrder)
                 val allStreams = orderedStreams.flatMap { it.streams }
+                if (effectiveMode == StreamAutoPlayMode.BEST_PREFERRED_AUDIO) { // fork
+                    selectContinuation(allStreams.filter(StreamAutoPlaySelector::isPlayable), playing)
+                        ?.let { return it }
+                }
                 return StreamAutoPlaySelector.selectAutoPlayStream(
                     streams = allStreams,
                     mode = effectiveMode,
@@ -1958,6 +1968,11 @@ internal fun PlayerRuntimeController.playNextEpisode(userInitiated: Boolean = fa
                 innerJob.cancel()
             }
 
+            Log.d(
+                PlayerRuntimeController.TAG,
+                "Next episode pick: mode=$effectiveMode playing=${playing.name}|${playing.addonName}" +
+                    "|${playing.behaviorHints?.bingeGroup} -> ${selectedStream?.name}|${selectedStream?.addonName}"
+            )
             val streamToPlay = selectedStream?.let {
                 resolveDirectDebridStreamIfNeeded(it, nextVideo.season, nextVideo.episode)
             }

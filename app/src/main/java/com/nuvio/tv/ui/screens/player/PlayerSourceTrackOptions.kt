@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.ui.screens.stream.StreamLanguageUnknown
 import com.nuvio.tv.ui.screens.stream.SourceRanking
 import com.nuvio.tv.ui.screens.stream.StreamQualityBucket
@@ -83,6 +84,34 @@ internal fun PlayerUiState.currentAudioLanguage(preferredLanguages: List<String>
         ?: return streamLanguages.firstOrNull()
     if (trackLanguage in streamLanguages || '-' in trackLanguage) return trackLanguage
     return preferredLanguages.firstOrNull { sameLanguage(it, trackLanguage) } ?: trackLanguage
+}
+
+/**
+ * The source playing: itself when it was picked in the player or is in the source list, else what
+ * the navigation brought (name, description, file name, binge group, addon; a resumed saved link
+ * brings only the name).
+ */
+internal fun PlayerRuntimeController.playingStream(): Stream {
+    val state = _uiState.value
+    return currentPlayingStream ?: state.currentSourceStream() ?: Stream(
+        name = state.currentStreamName,
+        title = null,
+        description = currentStreamDescription,
+        url = null,
+        ytId = null,
+        infoHash = null,
+        fileIdx = null,
+        externalUrl = null,
+        behaviorHints = StreamBehaviorHints(
+            notWebReady = null,
+            bingeGroup = currentStreamBingeGroup,
+            countryWhitelist = null,
+            proxyHeaders = null,
+            filename = currentFilename,
+        ),
+        addonName = state.currentStreamAddonName.orEmpty(),
+        addonLogo = null,
+    )
 }
 
 /** [language] as the panels pass it: a language code, or StreamLanguageUnknown for sources without one. */
