@@ -93,6 +93,10 @@ class ProfileSelectionViewModel @Inject constructor(
     private val _isPinOperationInProgress = MutableStateFlow(false)
     val isPinOperationInProgress: StateFlow<Boolean> = _isPinOperationInProgress.asStateFlow()
 
+    // Fork: declared before init, whose collector runs right away on Main.immediate (crashed on launch).
+    private val _profileThemes = MutableStateFlow<Map<Int, com.nuvio.tv.domain.model.AppTheme>>(emptyMap())
+    val profileThemes: StateFlow<Map<Int, com.nuvio.tv.domain.model.AppTheme>> = _profileThemes.asStateFlow()
+
     init {
         refreshProfilePinStates()
         viewModelScope.launch {
@@ -126,9 +130,6 @@ class ProfileSelectionViewModel @Inject constructor(
             }
         }
     }
-
-    private val _profileThemes = MutableStateFlow<Map<Int, com.nuvio.tv.domain.model.AppTheme>>(emptyMap())
-    val profileThemes: StateFlow<Map<Int, com.nuvio.tv.domain.model.AppTheme>> = _profileThemes.asStateFlow()
 
     fun loadAvatarCatalog() {
         viewModelScope.launch {
