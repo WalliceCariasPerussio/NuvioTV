@@ -199,6 +199,7 @@ fun PlayerScreen(
     var skipButtonActuallyVisible by remember { mutableStateOf(false) }
     var restoreStreamInfoFocus by remember { mutableStateOf(false) }
     var focusPlayAfterMoreBack by remember { mutableStateOf(false) }
+    var hideControlsAfterStreamInfo by remember { mutableStateOf(false) }
     val nextEpisodeFocusRequester = remember { FocusRequester() }
     var subtitleDelayFocusTarget by remember { mutableStateOf(SubtitleDelayFocusTarget.SLIDER) }
     val subtitleDelayResetFocusRequester = remember { FocusRequester() }
@@ -317,6 +318,13 @@ fun PlayerScreen(
             viewModel.onEvent(PlayerEvent.OnDismissTransientOverlay)
         } else if (uiState.showStreamInfoOverlay) {
             dismissStreamInfoOverlay()
+            if (hideControlsAfterStreamInfo) {
+                viewModel.hideControls()
+            } else if (uiState.showControls) {
+                restoreStreamInfoFocus = true
+                viewModel.onEvent(PlayerEvent.OnShowMoreDialog)
+            }
+            hideControlsAfterStreamInfo = false
         } else if (uiState.showPauseOverlay) {
             viewModel.onEvent(PlayerEvent.OnDismissPauseOverlay)
         } else if (uiState.showMoreDialog) {
@@ -344,9 +352,10 @@ fun PlayerScreen(
             postPlayRecommendationState.recommendation == null
         ) {
             viewModel.onEvent(PlayerEvent.OnDismissNextEpisodeCard)
-            // Transfer focus to skip button if it's still visible
             if (skipButtonActuallyVisible) {
                 runCatching { skipIntroFocusRequester.requestFocus() }
+            } else {
+                runCatching { containerFocusRequester.requestFocus() }
             }
         } else if (skipButtonActuallyVisible && !uiState.showControls) {
             viewModel.onEvent(PlayerEvent.OnDismissSkipIntro)
@@ -897,6 +906,22 @@ fun PlayerScreen(
                             )
                             true
                         }
+                        KeyEvent.KEYCODE_INFO -> {
+                            if (uiState.showStreamInfoOverlay) {
+                                viewModel.onEvent(PlayerEvent.OnDismissStreamInfo)
+                                if (hideControlsAfterStreamInfo) {
+                                    viewModel.hideControls()
+                                } else if (uiState.showControls) {
+                                    restoreStreamInfoFocus = true
+                                    viewModel.onEvent(PlayerEvent.OnShowMoreDialog)
+                                }
+                                hideControlsAfterStreamInfo = false
+                            } else {
+                                hideControlsAfterStreamInfo = !uiState.showControls
+                                viewModel.onEvent(PlayerEvent.OnShowStreamInfo)
+                            }
+                            true
+                        }
                         else -> false
                     }
                 } else false
@@ -1196,7 +1221,12 @@ fun PlayerScreen(
             suppressFocus = (uiState.postPlayMode is PostPlayMode.AutoPlay &&
                 postPlayRecommendationState.recommendation == null) || !skipIntroCanFocus,
             canFocus = skipIntroCanFocus,
-            onSkip = { viewModel.onEvent(PlayerEvent.OnSkipIntro) },
+            onSkip = {
+                if (uiState.showControls) {
+                    runCatching { playPauseFocusRequester.requestFocus() }
+                }
+                viewModel.onEvent(PlayerEvent.OnSkipIntro)
+            },
             onDismiss = { viewModel.onEvent(PlayerEvent.OnDismissSkipIntro) },
             onVisibilityChanged = { skipButtonActuallyVisible = it },
             onFocused = { viewModel.scheduleHideControls() },
@@ -1380,7 +1410,7 @@ fun PlayerScreen(
                             }
                         }
                     }
-                },
+                }.takeUnless { uiState.isServerStream },
                 onShowStreamInfo = {
                     restoreStreamInfoFocus = true
                     viewModel.onEvent(PlayerEvent.OnShowStreamInfo)
@@ -1654,8 +1684,8 @@ fun PlayerScreen(
         // Audio track dialog
         AudioSelectionOverlay(
             visible = uiState.showAudioOverlay && !uiState.audioOverlayQualityMode,
-            tracks = uiState.audioTracks,
-            selectedIndex = uiState.selectedAudioTrackIndex,
+            tracks = uiState.serverAudioTracks.ifEmpty { uiState.audioTracks },
+            selectedIndex = uiState.serverAudioTracks.firstOrNull { it.isSelected }?.index ?: uiState.selectedAudioTrackIndex,
             audioDelayMs = uiState.audioDelayMs,
             audioAmplificationDb = uiState.audioAmplificationDb,
             isAmplificationAvailable = uiState.isAudioAmplificationAvailable,
@@ -1695,8 +1725,12 @@ fun PlayerScreen(
 
         SubtitleSelectionOverlay(
             visible = uiState.showSubtitleOverlay,
-            internalTracks = uiState.subtitleTracks,
-            selectedInternalIndex = uiState.selectedSubtitleTrackIndex,
+            internalTracks = uiState.serverSubtitleTracks.ifEmpty { uiState.subtitleTracks },
+            selectedInternalIndex = if (uiState.serverSubtitleTracks.isEmpty()) {
+                uiState.selectedSubtitleTrackIndex
+            } else {
+                uiState.serverSubtitleTracks.firstOrNull { it.isSelected }?.index ?: -1
+            },
             addonSubtitles = uiState.addonSubtitles,
             selectedAddonSubtitle = uiState.selectedAddonSubtitle,
             subtitleStyle = uiState.subtitleStyle,
@@ -2200,7 +2234,7 @@ private fun PlayerControlsOverlay(
     onSwitchPlayerEngine: () -> Unit,
     onReportPlaybackIssue: () -> Unit,
     onToggleMoreActions: () -> Unit,
-    onOpenInExternalPlayer: () -> Unit,
+    onOpenInExternalPlayer: (() -> Unit)?,
     onShowStreamInfo: () -> Unit,
     onResetHideTimer: () -> Unit,
     onHideControls: () -> Unit,
@@ -2351,7 +2385,8 @@ private fun PlayerControlsOverlay(
                         upFocusRequester = progressBarUpFocusRequester,
                         downFocusRequester = playPauseFocusRequester,
                         onUpKey = onHideControls,
-                        onFocused = onResetHideTimer
+                        onFocused = onResetHideTimer,
+                        onClick = onPlayPause
                     )
                 }
 
@@ -2501,16 +2536,16 @@ private fun PlayerControlsOverlay(
                                 onDownKey = onHideControls,
                                 onFocused = onResetHideTimer
                             )
-                            ControlButton(
-                                icon = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = stringResource(R.string.cd_open_external_player),
-                                onClick = {
-                                    onOpenInExternalPlayer()
-                                },
-                                upFocusRequester = progressUpTarget,
-                                onDownKey = onHideControls,
-                                onFocused = onResetHideTimer
-                            )
+                            onOpenInExternalPlayer?.let { openInExternalPlayer ->
+                                ControlButton(
+                                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                                    contentDescription = stringResource(R.string.cd_open_external_player),
+                                    onClick = openInExternalPlayer,
+                                    upFocusRequester = progressUpTarget,
+                                    onDownKey = onHideControls,
+                                    onFocused = onResetHideTimer
+                                )
+                            }
                             ControlButton(
                                 icon = Icons.Default.Info,
                                 contentDescription = stringResource(R.string.cd_stream_info),
@@ -2566,7 +2601,8 @@ private fun PlayerControlsProgressBarHost(
     upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null,
     onUpKey: (() -> Unit)? = null,
-    onFocused: (() -> Unit)? = null
+    onFocused: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
 ) {
     val playbackTimeline by viewModel.playbackTimeline.collectAsState()
 
@@ -2584,6 +2620,7 @@ private fun PlayerControlsProgressBarHost(
         downFocusRequester = downFocusRequester,
         onUpKey = onUpKey,
         onFocused = onFocused,
+        onClick = onClick,
         bufferedPosition = playbackTimeline.bufferedPosition
     )
 }
@@ -2735,6 +2772,7 @@ private fun ProgressBar(
     downFocusRequester: FocusRequester? = null,
     onUpKey: (() -> Unit)? = null,
     onFocused: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
     /** Position (ms) up to which content is buffered. Pass 0 to skip the overlay. */
     bufferedPosition: Long = 0L
 ) {
@@ -2759,7 +2797,7 @@ private fun ProgressBar(
     )
     var isFocused by remember { mutableStateOf(false) }
 
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(if (isFocused) NuvioTheme.spacing.md else NuvioTheme.spacing.sm)
@@ -2790,6 +2828,11 @@ private fun ProgressBar(
                             onSeekCommit()
                             return@onPreviewKeyEvent true
                         }
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (onClick != null) return@onPreviewKeyEvent true
+                        }
                     }
                     return@onPreviewKeyEvent false
                 }
@@ -2797,6 +2840,17 @@ private fun ProgressBar(
                 // testing additional key handling for DPAD_LEFT and DPAD_RIGHT to allow seek in focus (check)
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (onClick != null) {
+                                // Ignore key-repeat so holding OK doesn't toggle repeatedly.
+                                if (keyEvent.nativeKeyEvent.repeatCount == 0) onClick()
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
                             if (downFocusRequester != null) {
                                 try {
@@ -2851,29 +2905,13 @@ private fun ProgressBar(
                 if (isFocused) Color.White.copy(alpha = 0.45f)
                 else Color.White.copy(alpha = 0.3f)
             )
-    ) {
-        val trackWidth = maxWidth
-
-        // Buffered-ahead overlay: the theme accent, faded so it reads under the played
-        // fill and on light themes.
-        if (animatedBufferedProgress > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(trackWidth * animatedBufferedProgress)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(NuvioTheme.colors.Secondary.copy(alpha = 0.35f))
+            .playerProgressFill(
+                progress = { animatedProgress },
+                bufferedProgress = { animatedBufferedProgress },
+                bufferedColor = NuvioTheme.colors.Secondary,
+                playedBrush = accentBrush
             )
-        }
-        // Played fill.
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(trackWidth * animatedProgress)
-                .clip(RoundedCornerShape(3.dp))
-                .background(accentBrush)
-        )
-    }
+    )
 }
 
 @Composable
