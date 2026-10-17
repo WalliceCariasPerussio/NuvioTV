@@ -27,6 +27,7 @@ import com.nuvio.tv.data.remote.dto.trakt.TraktWatchedMovieItemDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktWatchedShowItemDto
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.repository.MetaRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -279,6 +280,9 @@ class TraktProgressService @Inject constructor(
                 val success = try {
                     refreshRemoteSnapshot()
                     true
+                } catch (e: CancellationException) {
+                    // A newer signal replaced this refresh; that is not a failure and must not back off polling.
+                    throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to refresh remote snapshot", e)
                     false

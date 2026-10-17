@@ -221,7 +221,8 @@ fun TrackingSettingsContent(
         onMdbListLibraryListsClick = {
             mdbListViewModel.onLibraryListsOpened()
             showMdbListLibraryListsDialog = true
-        }
+        },
+        syncGroup = { TrackingSyncGroup() }
     )
 
     when (activeProvider) {
@@ -491,7 +492,8 @@ internal fun TrackingSettingsOverview(
     onMoreLikeThisClick: () -> Unit,
     onAnimeIdClick: () -> Unit,
     mdbListLibraryLists: MdbListLibraryListsUiState = MdbListLibraryListsUiState(),
-    onMdbListLibraryListsClick: () -> Unit = {}
+    onMdbListLibraryListsClick: () -> Unit = {},
+    syncGroup: @Composable () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
     val traktPresentation = traktConnectionPresentation(traktState)
@@ -665,6 +667,9 @@ internal fun TrackingSettingsOverview(
                             )
                         }
                     }
+                }
+                item(key = "tracking_sync") {
+                    syncGroup()
                 }
             }
             SettingsVerticalScrollIndicators(state = listState)

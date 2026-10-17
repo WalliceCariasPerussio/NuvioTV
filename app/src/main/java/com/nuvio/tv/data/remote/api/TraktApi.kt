@@ -91,6 +91,13 @@ interface TraktApi {
         @Body body: TraktScrobbleRequestDto
     ): Response<TraktScrobbleResponseDto>
 
+    /** Unlike stop, never records the title as watched, whatever the progress. */
+    @POST("scrobble/pause")
+    suspend fun scrobblePause(
+        @Header("Authorization") authorization: String,
+        @Body body: TraktScrobbleRequestDto
+    ): Response<TraktScrobbleResponseDto>
+
     @GET("sync/last_activities")
     suspend fun getLastActivities(
         @Header("Authorization") authorization: String

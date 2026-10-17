@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tracking_sync_section_title">Sincronização</string>
+    <string name="tracking_sync_section_subtitle">Último recurso quando o Continuar assistindo ou o histórico parecer desatualizado</string>
+    <string name="tracking_sync_now_title">Sincronizar agora</string>
+    <string name="tracking_sync_now_description">Envia ao Nuvio o que ficou pendente e baixa de novo o progresso, o histórico e a biblioteca das fontes ativas.</string>
+    <string name="tracking_sync_now_running">Sincronizando…</string>
+    <string name="tracking_sync_now_done">Sincronizado %1$s</string>
+    <string name="tracking_sync_now_just_now">agora mesmo</string>
+    <string name="tracking_sync_now_minutes_ago">há %1$d min</string>
+    <string name="tracking_sync_now_hours_ago">há %1$d h</string>
+    <string name="tracking_sync_now_failed">Não foi possível sincronizar: %1$s. Confira a conexão e tente de novo.</string>
+    <string name="tracking_sync_now_step_uploads">envios pendentes</string>
+    <string name="tracking_sync_now_step_nuvio">a nuvem do Nuvio</string>
+    <string name="tracking_sync_now_step_tracking">os serviços de acompanhamento</string>
+    <string name="tracking_nuvio_to_trakt_title">Enviar do Nuvio para o Trakt</string>
+    <string name="tracking_nuvio_to_trakt_description">Para quando outro aparelho salvou só na nuvem do Nuvio, sem o Trakt conectado. Compara os dois e mostra o que falta antes de enviar.</string>
+    <string name="tracking_nuvio_to_trakt_analyzing">Comparando a nuvem do Nuvio com o Trakt…</string>
+    <string name="tracking_nuvio_to_trakt_sending">Enviando ao Trakt…</string>
+    <string name="tracking_nuvio_to_trakt_nothing">O Trakt já tem tudo o que está na nuvem do Nuvio.</string>
+    <string name="tracking_nuvio_to_trakt_done">Enviado: %1$d ao histórico (%2$d confirmados pelo Trakt), %3$d em andamento e %4$d à watchlist.</string>
+    <string name="tracking_nuvio_to_trakt_failed">Não foi possível comparar ou enviar. Confira a conexão e tente de novo.</string>
+    <string name="tracking_nuvio_to_trakt_dialog_title">Enviar ao Trakt?</string>
+    <string name="tracking_nuvio_to_trakt_dialog_history">%1$d assistidos na nuvem do Nuvio que faltam no Trakt. Vão para o histórico do Trakt com a data original.</string>
+    <string name="tracking_nuvio_to_trakt_dialog_progress">%1$d em andamento. O Trakt retoma do mesmo ponto.</string>
+    <string name="tracking_nuvio_to_trakt_dialog_library">%1$d salvos na biblioteca do Nuvio que faltam no Trakt. Vão para a sua watchlist do Trakt.</string>
+    <string name="tracking_nuvio_to_trakt_dialog_skipped">%1$d itens com ID de anime (kitsu, mal) ficam de fora: o Trakt não consegue confirmar e eles seriam duplicados.</string>
+    <string name="tracking_nuvio_to_trakt_dialog_more">e mais %1$d</string>
+    <string name="tracking_nuvio_to_trakt_episode">%1$s · T%2$d E%3$d</string>
+    <string name="tracking_nuvio_to_trakt_send">Enviar</string>
+</resources>

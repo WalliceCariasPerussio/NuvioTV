@@ -153,6 +153,25 @@ class StartupSyncService @Inject constructor(
         }
     }
 
+    /**
+     * Forces a full pull like [requestSyncNow] and waits for it, so a manual "Sync now" can report the
+     * outcome. Profile settings stay out: the user asked to refresh watching data, not to overwrite settings.
+     * Returns false when there is no account or the pull failed.
+     */
+    suspend fun syncNowAndAwait(): Boolean {
+        if (authManager.authState.value !is AuthState.FullAccount) return false
+        val pulledBefore = lastPulledAtMs
+        requestSyncNow(includeProfileSettings = false)
+        // A queued follow-up pull is started by the one that just finished, so wait until none is left.
+        while (true) {
+            val job = startupPullJob?.takeIf { it.isActive } ?: break
+            job.join()
+        }
+        val pulledRecently = lastPulledAtMs > 0L &&
+            SystemClock.elapsedRealtime() - lastPulledAtMs < FORCE_RESYNC_MIN_INTERVAL_MS
+        return lastPulledAtMs > pulledBefore || pulledRecently
+    }
+
     fun requestForegroundSync() {
         scheduleActivityPull(
             reason = "foreground",
