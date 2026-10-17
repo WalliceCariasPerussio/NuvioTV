@@ -368,12 +368,20 @@ class NuvioToTraktSyncService @Inject constructor(
 
     private suspend fun sendPlan(profileId: Int, plan: NuvioToTraktPlan): NuvioToTraktUiState {
         requireReady(profileId)
+        // The plan was made when the dialog opened. Another device may have logged some of these since, and a
+        // history add is not idempotent, so what Trakt holds now decides what is still sent.
+        val alreadyThere = fetchTraktWatched().keys
+        val history = plan.history.filterNot { item ->
+            watchedKey(item.contentType, item.contentId, item.season, item.episode) in alreadyThere
+        }
         // Adds are sent in small batches; a failed batch stops here and a re-run recomputes what is left.
-        plan.history.chunked(SEND_CHUNK).forEach { chunk ->
+        history.chunked(SEND_CHUNK).forEach { chunk ->
             val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
                 traktApi.addHistory(authHeader, historyRequest(chunk))
             }
             if (response?.isSuccessful != true) throw IOException("Trakt history add failed (${response?.code()})")
+            val added = response.body()?.added
+            Log.i(TAG, "history add sent=${chunk.size} added=${(added?.movies ?: 0) + (added?.episodes ?: 0)}")
             val sentAt = System.currentTimeMillis()
             synchronized(lock) { chunk.forEach { item -> sentHistoryAt["$profileId|${historyIdentity(item)}"] = sentAt } }
         }
@@ -390,17 +398,17 @@ class NuvioToTraktSyncService @Inject constructor(
 
         // Trakt answers adds without per-item detail; re-reading its history shows what actually landed.
         val confirmedKeys = fetchTraktWatched().keys
-        val historyConfirmed = plan.history.count { item ->
+        val historyConfirmed = history.count { item ->
             watchedKey(item.contentType, item.contentId, item.season, item.episode) in confirmedKeys
         }
         Log.i(
             TAG,
-            "sent profile=$profileId history=${plan.history.size} confirmed=$historyConfirmed " +
+            "sent profile=$profileId history=${history.size} confirmed=$historyConfirmed " +
                 "inProgress=$inProgressSent/${plan.inProgress.size} library=$libraryAdded/${plan.library.size}"
         )
         syncNowService.syncNow()
         return NuvioToTraktUiState.Done(
-            historySent = plan.history.size,
+            historySent = history.size,
             historyConfirmed = historyConfirmed,
             inProgressSent = inProgressSent,
             librarySent = libraryAdded,

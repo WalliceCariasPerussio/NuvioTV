@@ -104,8 +104,10 @@ class SyncNowService @Inject constructor(
         }
         if (!refreshTracking(progressSource, libraryMode)) failed += SyncNowStep.TRACKING_REFRESH
 
-        // Offline the cache is all Home has for posters and next-up episodes, so keep it when the pull failed.
-        if (SyncNowStep.NUVIO_PULL !in failed && SyncNowStep.TRACKING_REFRESH !in failed) {
+        // The cache only needs rebuilding when Nuvio itself is the source and its pull finished. A tracking
+        // service refreshes in the background and replaces the cache as soon as it answers, and a failed pull
+        // (or no account) leaves the cache as the only thing Home has for posters and next-up episodes.
+        if (signedIn && progressSource == WatchProgressSource.NUVIO_SYNC && failed.isEmpty()) {
             cwEnrichmentCache.saveInProgressSnapshot(emptyList(), force = true)
             cwEnrichmentCache.saveNextUpSnapshot(emptyList(), force = true)
         }
