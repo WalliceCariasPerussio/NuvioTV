@@ -101,6 +101,9 @@ class SyncNowService @Inject constructor(
             // Rows whose push failed stay queued locally; sending them first keeps the pull below from burying them.
             if (!pushPendingUploads(profileId)) failed += SyncNowStep.PENDING_UPLOADS
             if (!startupSyncService.syncNowAndAwait()) failed += SyncNowStep.NUVIO_PULL
+        } else if (progressSource.providerId == null && libraryMode.providerId == null) {
+            // Nothing to sync with: no account and no tracking service. Say so instead of reporting success.
+            failed += SyncNowStep.NUVIO_PULL
         }
         if (!refreshTracking(progressSource, libraryMode)) failed += SyncNowStep.TRACKING_REFRESH
 

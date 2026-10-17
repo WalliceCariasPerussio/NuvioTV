@@ -368,22 +368,32 @@ class NuvioToTraktSyncService @Inject constructor(
 
     private suspend fun sendPlan(profileId: Int, plan: NuvioToTraktPlan): NuvioToTraktUiState {
         requireReady(profileId)
-        // The plan was made when the dialog opened. Another device may have logged some of these since, and a
-        // history add is not idempotent, so what Trakt holds now decides what is still sent.
-        val alreadyThere = fetchTraktWatched().keys
-        val history = plan.history.filterNot { item ->
-            watchedKey(item.contentType, item.contentId, item.season, item.episode) in alreadyThere
-        }
         // Adds are sent in small batches; a failed batch stops here and a re-run recomputes what is left.
-        history.chunked(SEND_CHUNK).forEach { chunk ->
-            val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
-                traktApi.addHistory(authHeader, historyRequest(chunk))
+        val history = mutableListOf<WatchedItem>()
+        plan.history.chunked(SEND_CHUNK).forEach { chunk ->
+            // The plan was made when the dialog opened. Another device may have logged some of these since, and a
+            // history add is not idempotent, so what Trakt holds right before each batch decides what goes in it.
+            val alreadyThere = fetchTraktWatched().keys
+            val toSend = chunk.filterNot { item ->
+                watchedKey(item.contentType, item.contentId, item.season, item.episode) in alreadyThere
             }
-            if (response?.isSuccessful != true) throw IOException("Trakt history add failed (${response?.code()})")
+            if (toSend.isEmpty()) return@forEach
+            // Marked before the request: if it times out after Trakt processed it, a re-run must not add it again.
+            markHistorySent(profileId, toSend)
+            val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+                traktApi.addHistory(authHeader, historyRequest(toSend))
+            }
+            if (response == null) throw IOException("Trakt history add got no answer")
+            if (!response.isSuccessful) {
+                // Trakt answered with an error, so nothing was recorded and the batch can be offered again.
+                unmarkHistorySent(profileId, toSend)
+                throw IOException("Trakt history add failed (${response.code()})")
+            }
             val added = response.body()?.added
-            Log.i(TAG, "history add sent=${chunk.size} added=${(added?.movies ?: 0) + (added?.episodes ?: 0)}")
-            val sentAt = System.currentTimeMillis()
-            synchronized(lock) { chunk.forEach { item -> sentHistoryAt["$profileId|${historyIdentity(item)}"] = sentAt } }
+            val addedCount = (added?.movies ?: 0) + (added?.episodes ?: 0)
+            Log.i(TAG, "history add sent=${toSend.size} added=$addedCount")
+            if (addedCount == 0) unmarkHistorySent(profileId, toSend)
+            history += toSend
         }
 
         var inProgressSent = 0
@@ -514,6 +524,15 @@ class NuvioToTraktSyncService @Inject constructor(
         }
         val result = response.body()
         return listOfNotNull(result?.added, result?.existing).sumOf { counts -> (counts.movies ?: 0) + (counts.shows ?: 0) }
+    }
+
+    private fun markHistorySent(profileId: Int, items: List<WatchedItem>) {
+        val sentAt = System.currentTimeMillis()
+        synchronized(lock) { items.forEach { item -> sentHistoryAt["$profileId|${historyIdentity(item)}"] = sentAt } }
+    }
+
+    private fun unmarkHistorySent(profileId: Int, items: List<WatchedItem>) {
+        synchronized(lock) { items.forEach { item -> sentHistoryAt.remove("$profileId|${historyIdentity(item)}") } }
     }
 
     private class RecentlySent(val pausedPercentByKey: Map<String, Double>, val historyIdentities: Set<String>)

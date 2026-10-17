@@ -78,8 +78,6 @@ class StartupSyncService @Inject constructor(
     private var lastPulledAtMs: Long = 0L
     private var activityPullFreshness = SurfacePullFreshness()
     @Volatile
-    private var lastStartupPullFailedAtMs: Long = 0L
-    @Volatile
     private var forceSyncRequested: Boolean = false
     @Volatile
     private var forceSyncIncludesProfileSettings: Boolean = true
@@ -162,15 +160,14 @@ class StartupSyncService @Inject constructor(
      */
     suspend fun syncNowAndAwait(): Boolean {
         if (authManager.authState.value !is AuthState.FullAccount) return false
+        // A pull already running cannot be turned into a forced one: a request made meanwhile is only queued, and
+        // nothing starts it afterwards. So let it finish, then run the forced pull.
+        startupPullJob?.takeIf { it.isActive }?.join()
         val pulledBefore = lastPulledAtMs
-        val requestedAt = SystemClock.elapsedRealtime()
         requestSyncNow(includeProfileSettings = false)
-        // A queued follow-up pull is started by the one that just finished, so wait until none is left.
-        while (true) {
-            val job = startupPullJob?.takeIf { it.isActive } ?: break
-            job.join()
-        }
-        if (lastStartupPullFailedAtMs >= requestedAt) return false
+        startupPullJob?.takeIf { it.isActive }?.join()
+        // Within the cooldown no new pull is started, and data pulled seconds ago counts as fresh. Outside it a
+        // failed pull leaves lastPulledAtMs untouched, so success always means a pull really finished.
         val pulledRecently = lastPulledAtMs > 0L &&
             SystemClock.elapsedRealtime() - lastPulledAtMs < FORCE_RESYNC_MIN_INTERVAL_MS
         return lastPulledAtMs > pulledBefore || pulledRecently
@@ -426,8 +423,6 @@ class StartupSyncService @Inject constructor(
                 }
             }
             
-            if (!syncCompleted) lastStartupPullFailedAtMs = SystemClock.elapsedRealtime()
-
             val resyncKey = pendingResyncKey
             if (resyncKey != null) {
                 val resyncIncludesProfileSettings = pendingResyncIncludesProfileSettings
