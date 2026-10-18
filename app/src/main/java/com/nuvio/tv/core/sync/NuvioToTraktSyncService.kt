@@ -43,10 +43,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.OkHttpClient
 import retrofit2.Response
+import retrofit2.Retrofit
 import java.io.IOException
 import java.time.Instant
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 private const val TAG = "NuvioToTraktSync"
@@ -90,12 +93,24 @@ class NuvioToTraktSyncService @Inject constructor(
     private val postgrest: Postgrest,
     private val libraryRemote: LibrarySyncRemoteDataSource,
     private val traktApi: TraktApi,
+    @param:Named("trakt") private val traktRetrofit: Retrofit,
     private val traktAuthService: TraktAuthService,
     private val traktLibraryService: TraktLibraryService,
     private val episodeMappingService: TraktEpisodeMappingService,
     private val syncNowService: SyncNowService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * For history adds, which are not idempotent (each adds a play): the Trakt client without OkHttp's resend of
+     * a request whose connection dropped, which happens even after the request went out and Trakt recorded it.
+     */
+    private val historyApi: TraktApi by lazy {
+        val client = (traktRetrofit.callFactory() as OkHttpClient).newBuilder()
+            .retryOnConnectionFailure(false)
+            .build()
+        traktRetrofit.newBuilder().client(client).build().create(TraktApi::class.java)
+    }
     private val lock = Any()
     private var job: Job? = null
 
@@ -383,7 +398,7 @@ class NuvioToTraktSyncService @Inject constructor(
                 // Marked as the request goes out: if it times out after Trakt processed it, a re-run must not add
                 // it again. Not before: a batch that never left (no token, circuit open) stays on offer.
                 markHistorySent(profileId, toSend)
-                traktApi.addHistory(authHeader, historyRequest(toSend))
+                historyApi.addHistory(authHeader, historyRequest(toSend))
             }
             if (response == null) throw IOException("Trakt history add got no answer")
             if (!response.isSuccessful) {
@@ -393,8 +408,10 @@ class NuvioToTraktSyncService @Inject constructor(
                 throw IOException("Trakt history add failed (${response.code()})")
             }
             val added = response.body()?.added
-            val addedCount = (added?.movies ?: 0) + (added?.episodes ?: 0)
+            val addedCount = added?.let { (it.movies ?: 0) + (it.episodes ?: 0) }
             Log.i(TAG, "history add sent=${toSend.size} added=$addedCount")
+            // Trakt said it recorded none of them (all not found): nothing to guard against. An answer without
+            // the counts says nothing, so the batch stays marked.
             if (addedCount == 0) unmarkHistorySent(profileId, toSend)
             history += toSend
         }
