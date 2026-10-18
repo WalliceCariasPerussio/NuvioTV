@@ -179,6 +179,38 @@ class AddonPreferences @Inject constructor(
         }
     }
 
+    // Fork: read and write another profile's addons (sending an addon to other profiles). These go
+    // straight to that profile's store; store() follows the active profile.
+    suspend fun addonEntriesForProfile(profileId: Int): List<ProfileAddonEntry> {
+        val preferences = factory.get(profileId, FEATURE).data.first()
+        val names = preferences[userSetNamesKey]?.let(::parseNameMap).orEmpty()
+        val states = getCurrentEnabledStates(preferences)
+        return getCurrentList(preferences).map { url ->
+            val canonical = canonicalizeUrl(url)
+            ProfileAddonEntry(url = canonical, name = names[canonical], enabled = states[canonical] ?: true)
+        }
+    }
+
+    suspend fun addAddonForProfile(profileId: Int, url: String, userSetName: String? = null): Boolean {
+        var changed = false
+        factory.get(profileId, FEATURE).edit { preferences ->
+            val current = getCurrentList(preferences)
+            val normalizedUrl = canonicalizeUrl(url)
+            if (current.any { canonicalizeUrl(it).equals(normalizedUrl, ignoreCase = true) }) return@edit
+            preferences[orderedUrlsKey] = gson.toJson(current + normalizedUrl)
+            val states = getCurrentEnabledStates(preferences).toMutableMap()
+            states[normalizedUrl] = true
+            preferences[addonEnabledStatesKey] = gson.toJson(states)
+            if (!userSetName.isNullOrBlank()) {
+                val names = preferences[userSetNamesKey]?.let(::parseNameMap).orEmpty().toMutableMap()
+                names[normalizedUrl] = userSetName
+                preferences[userSetNamesKey] = gson.toJson(names)
+            }
+            changed = true
+        }
+        return changed
+    }
+
     private fun getCurrentList(preferences: Preferences): List<String> {
         val json = preferences[orderedUrlsKey]
         return if (json != null) {
@@ -243,3 +275,9 @@ class AddonPreferences @Inject constructor(
         "https://opensubtitles-v3.strem.io"
     )
 }
+
+data class ProfileAddonEntry(
+    val url: String,
+    val name: String?,
+    val enabled: Boolean
+)

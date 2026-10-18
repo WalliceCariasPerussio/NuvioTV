@@ -55,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -129,12 +130,19 @@ private sealed interface AddonExperienceModeState {
 @Composable
 fun AddonManagerScreen(
     viewModel: AddonManagerViewModel = hiltViewModel(),
+    transferViewModel: AddonProfileTransferViewModel = hiltViewModel(),
     showBuiltInHeader: Boolean = true,
     onBackPress: () -> Unit = {},
     onNavigateToCatalogOrder: () -> Unit = {},
     onNavigateToCollections: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val sendTargets by transferViewModel.targets.collectAsState()
+    val sendDialog by transferViewModel.dialog.collectAsState()
+    val sendMessage by transferViewModel.message.collectAsState()
+    val sendDialogOpen by rememberUpdatedState(sendDialog != null)
+    val sendButtonFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    var sendDialogAddonUrl by remember { mutableStateOf<String?>(null) }
     val firstAddonToggleFocusRequester = remember { FocusRequester() }
     val experienceModeState by remember(viewModel) {
         viewModel.experienceMode.map<ExperienceMode?, AddonExperienceModeState> {
@@ -212,9 +220,20 @@ fun AddonManagerScreen(
     }
 
     LaunchedEffect(uiState.isQrModeActive, uiState.pendingChange, addonUrlPendingDeletion) {
-        if (!uiState.isQrModeActive && uiState.pendingChange == null && !isEditing && addonUrlPendingDeletion == null) {
+        if (!uiState.isQrModeActive && uiState.pendingChange == null && !isEditing && addonUrlPendingDeletion == null &&
+            !sendDialogOpen
+        ) {
             requestInputBarFocus()
         }
+    }
+
+    // Fork: back on the Send button of the addon once its dialog closes.
+    LaunchedEffect(sendDialog == null) {
+        if (sendDialog != null) return@LaunchedEffect
+        val addonUrl = sendDialogAddonUrl ?: return@LaunchedEffect
+        sendDialogAddonUrl = null
+        repeat(2) { withFrameNanos { } }
+        runCatching { sendButtonFocusRequesters[addonUrl]?.requestFocus() }
     }
 
     LaunchedEffect(addonUrlPendingDeletion) {
@@ -237,7 +256,8 @@ fun AddonManagerScreen(
                 !uiState.isQrModeActive &&
                 uiState.pendingChange == null &&
                 !isEditing &&
-                addonUrlPendingDeletion == null
+                addonUrlPendingDeletion == null &&
+                !sendDialogOpen
             ) {
                 requestInputBarFocus()
             }
@@ -500,6 +520,15 @@ fun AddonManagerScreen(
                         },
                         onRemove = { addonUrlPendingDeletion = addon.baseUrl },
                         onEnabledChange = { enabled -> viewModel.setAddonEnabled(addon.baseUrl, enabled) },
+                        onSend = if (sendTargets.isNotEmpty() && !viewModel.isReadOnly) {
+                            {
+                                sendDialogAddonUrl = addon.baseUrl
+                                transferViewModel.open(addon)
+                            }
+                        } else {
+                            null
+                        },
+                        sendFocusRequester = sendButtonFocusRequesters.getOrPut(addon.baseUrl) { FocusRequester() },
                         isReadOnly = viewModel.isReadOnly,
                         showReorder = !isEssential,
                         toggleFocusRequester = if (index == 0) firstAddonToggleFocusRequester else null
@@ -566,9 +595,23 @@ fun AddonManagerScreen(
             }
         }
 
+        sendDialog?.let { state ->
+            AddonSendToProfileDialog(
+                state = state,
+                onToggle = transferViewModel::toggle,
+                onDismiss = transferViewModel::dismiss,
+                onSend = transferViewModel::send
+            )
+        }
+
         AddonMessageOverlay(
             message = uiState.transientMessage,
             isError = uiState.transientMessageIsError
+        )
+
+        AddonMessageOverlay(
+            message = sendMessage?.parts?.map { (resId, arg) -> stringResource(resId, arg) }?.joinToString(" "),
+            isError = sendMessage?.isError == true
         )
     }
 }
@@ -1279,6 +1322,8 @@ private fun AddonCard(
     onMoveDown: () -> Unit,
     onRemove: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
+    onSend: (() -> Unit)? = null,
+    sendFocusRequester: FocusRequester? = null,
     isReadOnly: Boolean = false,
     showReorder: Boolean = true,
     toggleFocusRequester: FocusRequester? = null
@@ -1327,6 +1372,8 @@ private fun AddonCard(
                 onMoveDown = onMoveDown,
                 onRemove = onRemove,
                 onEnabledChange = onEnabledChange,
+                onSend = onSend,
+                sendFocusRequester = sendFocusRequester,
                 showReorder = showReorder,
                 toggleFocusRequester = effectiveToggleFocusRequester
             )
@@ -1345,6 +1392,8 @@ private fun AddonCardContent(
     onMoveDown: () -> Unit = {},
     onRemove: () -> Unit = {},
     onEnabledChange: (Boolean) -> Unit = {},
+    onSend: (() -> Unit)? = null,
+    sendFocusRequester: FocusRequester? = null,
     showReorder: Boolean = true,
     toggleFocusRequester: FocusRequester? = null
 ) {
@@ -1448,6 +1497,23 @@ private fun AddonCardContent(
                             shape = ButtonDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md))
                         ) {
                             Icon(imageVector = Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.cd_move_down))
+                        }
+                    }
+                    if (onSend != null) {
+                        Button(
+                            onClick = onSend,
+                            modifier = Modifier
+                                .focusRequester(sendFocusRequester ?: remember { FocusRequester() })
+                                .semantics { role = Role.Button },
+                            colors = ButtonDefaults.colors(
+                                containerColor = NuvioTheme.colors.BackgroundCard,
+                                contentColor = NuvioTheme.colors.TextSecondary,
+                                focusedContainerColor = NuvioTheme.colors.FocusBackground,
+                                focusedContentColor = NuvioTheme.colors.Primary
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md))
+                        ) {
+                            Text(text = stringResource(R.string.addon_send_button))
                         }
                     }
                     Button(

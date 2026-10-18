@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="addon_send_button">Send</string>
+    <string name="addon_send_title">Send %1$s to another profile</string>
+    <string name="addon_send_subtitle">It goes at the end of each chosen profile\'s list. Their other addons stay as they are.</string>
+    <string name="addon_send_checking">Checking the profiles…</string>
+    <string name="addon_send_already_has">%1$s · already has it</string>
+    <string name="addon_send_action">Send</string>
+    <string name="addon_send_sending">Sending…</string>
+    <string name="addon_send_done">Sent to %1$s.</string>
+    <string name="addon_send_already_had">%1$s already had it.</string>
+    <string name="addon_send_failed">Couldn\'t send to %1$s. Check the connection and try again.</string>
+</resources>

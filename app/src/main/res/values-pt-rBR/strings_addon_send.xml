@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="addon_send_button">Enviar</string>
+    <string name="addon_send_title">Enviar %1$s para outro perfil</string>
+    <string name="addon_send_subtitle">Ele entra no fim da lista dos perfis marcados. Os outros addons deles continuam como estão.</string>
+    <string name="addon_send_checking">Verificando os perfis…</string>
+    <string name="addon_send_already_has">%1$s · já tem</string>
+    <string name="addon_send_action">Enviar</string>
+    <string name="addon_send_sending">Enviando…</string>
+    <string name="addon_send_done">Enviado para %1$s.</string>
+    <string name="addon_send_already_had">%1$s já tinha esse addon.</string>
+    <string name="addon_send_failed">Não foi possível enviar para %1$s. Confira a conexão e tente de novo.</string>
+</resources>
