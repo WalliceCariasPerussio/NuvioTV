@@ -673,6 +673,11 @@ private fun PlayerRuntimeController.applyStreamMetadata(stream: Stream) {
     currentVideoHeight = null
     currentVideoBitrate = null
     persistBingeGroup(stream.behaviorHints?.bingeGroup, stream.behaviorHints?.filename, stream.infoHash)
+    contentId?.let { cid ->
+        scope.launch(kotlinx.coroutines.NonCancellable) {
+            lastSourceCacheDataStore.save(cid, stream) // fork: the next episode keeps this source
+        }
+    }
 }
 
 // Persist binge group per content so subsequent episode plays

@@ -93,6 +93,8 @@ class StreamScreenViewModel @Inject constructor(
     private val bingeGroupCacheDataStore: BingeGroupCacheDataStore,
     // Fork: the audio language chosen for this title leads the "best in my language" autoplay.
     private val trackPreferenceDataStore: com.nuvio.tv.data.local.TrackPreferenceDataStore,
+    // Fork: an episode starts on the source last played for this title, as the player's next one.
+    private val lastSourceCacheDataStore: com.nuvio.tv.data.local.LastSourceCacheDataStore,
     private val torrentSettings: TorrentSettings,
     private val watchProgressRepository: WatchProgressRepository,
     private val trackingScrobbleCoordinator: TrackingScrobbleCoordinator,
@@ -540,6 +542,15 @@ class StreamScreenViewModel @Inject constructor(
             val persistedInfoHash = if (persistedBingeGroup != null) {
                 contentId?.let { bingeGroupCacheDataStore.getInfoHash(it) }
             } else null
+            // Fork: an episode starts on the source last played for this title (its release, else
+            // the same name, else the same addon and quality; same audio), before the language rule.
+            val lastPlayedSource = if (
+                episode != null && playerSettings.streamAutoPlayMode == StreamAutoPlayMode.BEST_PREFERRED_AUDIO
+            ) {
+                runCatching { lastSourceCacheDataStore.get(contentId ?: videoId.substringBefore(":")) }.getOrNull()
+            } else null
+            fun continuingSource(streams: List<Stream>): Stream? =
+                lastPlayedSource?.let { selectContinuation(streams.filter(StreamAutoPlaySelector::isPlayable), it) }
 
             fun applySuccess(addonStreamGroups: List<AddonStreams>, isAllLoaded: Boolean) {
                 val orderedAddonStreams = StreamAutoPlaySelector.orderAddonStreams(
@@ -636,7 +647,7 @@ class StreamScreenViewModel @Inject constructor(
                 } else if (!shouldAutoSelect) {
                     null
                 } else {
-                    StreamAutoPlaySelector.selectAutoPlayStream(
+                    continuingSource(allStreams) ?: StreamAutoPlaySelector.selectAutoPlayStream(
                         streams = allStreams,
                         mode = playerSettings.streamAutoPlayMode,
                         regexPattern = playerSettings.streamAutoPlayRegex,
@@ -870,7 +881,10 @@ class StreamScreenViewModel @Inject constructor(
                                 val orderedStreams = StreamAutoPlaySelector.orderAddonStreams(
                                     result.data, installedAddonOrder
                                 ).flatMap { it.streams }
-                                val bestSoFar = StreamAutoPlaySelector.selectAutoPlayStream(
+                                // The source last played starts as soon as it arrives; while it may
+                                // still arrive, nothing else starts early.
+                                val continuing = continuingSource(orderedStreams)
+                                val bestSoFar = continuing ?: if (lastPlayedSource != null) null else StreamAutoPlaySelector.selectAutoPlayStream(
                                     streams = orderedStreams,
                                     mode = playerSettings.streamAutoPlayMode,
                                     regexPattern = playerSettings.streamAutoPlayRegex,
@@ -881,8 +895,8 @@ class StreamScreenViewModel @Inject constructor(
                                     preferredLanguages = autoPlayLanguages,
                                     maxQuality = autoPlayMaxQuality
                                 )
-                                if (bestSoFar != null &&
-                                    isUnbeatableChoice(bestSoFar, autoPlayLanguages.firstOrNull(), autoPlayMaxQuality)
+                                if (bestSoFar != null && (continuing != null ||
+                                    isUnbeatableChoice(bestSoFar, autoPlayLanguages.firstOrNull(), autoPlayMaxQuality))
                                 ) {
                                     resolvedAutoPlayTarget = true
                                     autoSelectTriggered = true
@@ -1614,6 +1628,10 @@ class StreamScreenViewModel @Inject constructor(
             contentLanguage = contentLanguage
         )
         StreamSidecarSubtitles.set(playbackUrlFor(playbackInfo), stream.subtitles)
+        // Fork: the next episode opened from here starts on this source.
+        playbackInfo.contentId?.takeIf { it.isNotBlank() }?.let { cid ->
+            viewModelScope.launch { runCatching { lastSourceCacheDataStore.save(cid, stream) } }
+        }
 
         val url = playbackInfo.url
         if (saveLastLink && !url.isNullOrBlank() && !playbackInfo.isExternal) {

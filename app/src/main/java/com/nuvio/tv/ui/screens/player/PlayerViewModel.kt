@@ -66,6 +66,7 @@ class PlayerViewModel @Inject constructor(
     private val streamLinkCacheDataStore: StreamLinkCacheDataStore,
     private val streamBadgeSettingsDataStore: StreamBadgeSettingsDataStore,
     private val bingeGroupCacheDataStore: com.nuvio.tv.data.local.BingeGroupCacheDataStore,
+    private val lastSourceCacheDataStore: com.nuvio.tv.data.local.LastSourceCacheDataStore, // fork
     private val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     private val episodeShufflePlayback: com.nuvio.tv.core.player.EpisodeShufflePlayback,
     private val watchedItemsPreferences: com.nuvio.tv.data.local.WatchedItemsPreferences,
@@ -128,6 +129,7 @@ class PlayerViewModel @Inject constructor(
         streamLinkCacheDataStore = streamLinkCacheDataStore,
         streamBadgeSettingsDataStore = streamBadgeSettingsDataStore,
         bingeGroupCacheDataStore = bingeGroupCacheDataStore,
+        lastSourceCacheDataStore = lastSourceCacheDataStore,
         layoutPreferenceDataStore = layoutPreferenceDataStore,
         watchedItemsPreferences = watchedItemsPreferences,
         episodeShufflePlayback = episodeShufflePlayback,

@@ -84,6 +84,7 @@ class PlayerRuntimeController(
     internal val streamLinkCacheDataStore: StreamLinkCacheDataStore,
     internal val streamBadgeSettingsDataStore: StreamBadgeSettingsDataStore,
     internal val bingeGroupCacheDataStore: BingeGroupCacheDataStore,
+    internal val lastSourceCacheDataStore: com.nuvio.tv.data.local.LastSourceCacheDataStore, // fork
     internal val layoutPreferenceDataStore: com.nuvio.tv.data.local.LayoutPreferenceDataStore,
     internal val episodeShufflePlayback: com.nuvio.tv.core.player.EpisodeShufflePlayback,
     internal val watchedItemsPreferences: com.nuvio.tv.data.local.WatchedItemsPreferences,
