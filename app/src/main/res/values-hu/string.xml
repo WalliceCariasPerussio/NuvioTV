@@ -3238,8 +3238,6 @@
     <string name="playback_reset_to_default">Visszaállítás alapértelmezettre</string>
     <string name="playback_net_custom">Egyéni hálózati beállítások</string>
     <string name="playback_net_custom_sub">Több párhuzamos kapcsolat használata a progresszív streamek letöltéséhez. Ha ki van kapcsolva, egyetlen kapcsolatot használ.</string>
-    <string name="playback_net_http2">HTTP/2 engedélyezése</string>
-    <string name="playback_net_http2_sub">A HTTP/2 protokoll engedélyezése a kérések egy kapcsolaton belüli párhuzamos kezeléséhez és a gyorsabb kapcsolatfelépítéshez.</string>
     <string name="playback_net_parallel">Párhuzamos kapcsolatok</string>
     <string name="playback_net_parallel_sub">Több kapcsolat párhuzamos használata streamek letöltéséhez. Aktiváld, ha pufferelést tapasztalsz annak ellenére, hogy a letöltési sebességed egyértelműen elegendő.</string>
     <string name="playback_net_connection_count">Kapcsolatok száma</string>

@@ -5,6 +5,7 @@
 
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.ui.screens.detail.formatPlaybackTime
 import com.nuvio.tv.ui.theme.NuvioMotion
 
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -71,12 +72,14 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.HighQuality
 import com.nuvio.tv.ui.screens.stream.preferredAudioTargets
 import com.nuvio.tv.ui.screens.stream.bucket
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -94,6 +97,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import androidx.compose.ui.platform.LocalContext
@@ -101,6 +107,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -127,6 +134,12 @@ import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.core.party.PartyAction
+import com.nuvio.tv.core.party.PartyMedia
+import com.nuvio.tv.core.party.PartyNotice
+import com.nuvio.tv.core.party.PartySync
+import com.nuvio.tv.ui.screens.party.PartyPanel
+import com.nuvio.tv.ui.screens.party.PartyStatusPill
 import com.nuvio.tv.core.player.PlayerWindowBackdrop
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import com.nuvio.tv.data.local.InternalPlayerEngine
@@ -148,6 +161,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
 import kotlin.math.abs
+import kotlinx.coroutines.flow.collectLatest
 
 private fun PlayerUiState.returnFocusSeasonEpisode(completed: Boolean): Pair<Int?, Int?> {
     val next = nextEpisode?.takeIf {
@@ -177,9 +191,23 @@ fun PlayerScreen(
     onPlaybackErrorBack: () -> Unit = { onBackPress(null, null, null, false, false) },
     onPlaybackEnded: ((nextVideoId: String?, nextSeason: Int?, nextEpisode: Int?, exitReason: PlayerExitReason?) -> Unit)? = null,
     onPlayRecommendation: (PostPlayRecommendation, manualSelection: Boolean) -> Unit = { _, _ -> },
-    onOpenRecommendationDetails: (PostPlayRecommendation) -> Unit = {}
+    onOpenRecommendationDetails: (PostPlayRecommendation) -> Unit = {},
+    onOpenPartyMedia: (PartyMedia) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val partyState by viewModel.party.state.collectAsState()
+    val partyPlayback by viewModel.party.playback.collectAsState()
+    val partyAvailable by viewModel.party.available.collectAsState()
+    val partyCanUse by viewModel.party.canUse.collectAsState()
+    val partyProfile by viewModel.party.profile.collectAsState()
+    var partyNotice by remember { mutableStateOf<PartyNotice?>(null) }
+    LaunchedEffect(Unit) {
+        viewModel.party.notices.collectLatest { next ->
+            partyNotice = next
+            kotlinx.coroutines.delay(3000)
+            partyNotice = null
+        }
+    }
     val postPlayRecommendationState by viewModel.postPlayRecommendationUiState.collectAsState()
     val effectiveAutoplayEnabled by viewModel.effectiveAutoplayEnabled.collectAsState(initial = false)
     val playerSettings by viewModel.playerSettings.collectAsState(initial = null)
@@ -336,6 +364,8 @@ fun PlayerScreen(
             viewModel.onEvent(PlayerEvent.OnHideSubtitleDelayOverlay)
         } else if (uiState.showSubtitleStylePanel) {
             viewModel.onEvent(PlayerEvent.OnDismissSubtitleStylePanel)
+        } else if (uiState.showPartyPanel) {
+            viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
         } else if (uiState.showSourcesPanel) {
             if (uiState.currentStreamUrl.isNullOrBlank()) {
                 exitPlayer()
@@ -502,6 +532,7 @@ fun PlayerScreen(
         uiState.showControls,
         uiState.showEpisodesPanel,
         uiState.showSourcesPanel,
+        uiState.showPartyPanel,
         uiState.showSubtitleStylePanel,
         uiState.showSubtitleDelayOverlay,
         uiState.showSubtitleTimingDialog,
@@ -513,6 +544,7 @@ fun PlayerScreen(
     ) {
         if (shouldConfirmNextEpisodeOnEnd || postPlayRecommendationState.isVisible) return@LaunchedEffect
         if (uiState.error != null) return@LaunchedEffect
+        if (uiState.showPartyPanel) return@LaunchedEffect
         if (uiState.showControls && !uiState.showEpisodesPanel && !uiState.showSourcesPanel &&
             !uiState.showAudioOverlay && !uiState.showSubtitleOverlay &&
             !uiState.showSubtitleStylePanel && !uiState.showSubtitleDelayOverlay &&
@@ -635,6 +667,7 @@ fun PlayerScreen(
                 } else if (
                     !uiState.showEpisodesPanel &&
                     !uiState.showSourcesPanel &&
+                    !uiState.showPartyPanel &&
                     !uiState.showAudioOverlay &&
                     !uiState.showSubtitleOverlay &&
                     !uiState.showSubtitleStylePanel &&
@@ -757,7 +790,7 @@ fun PlayerScreen(
                 }
 
                 // When a side panel or dialog is open, let it handle all keys
-                val panelOrDialogOpen = uiState.showEpisodesPanel || uiState.showSourcesPanel ||
+                val panelOrDialogOpen = uiState.showEpisodesPanel || uiState.showSourcesPanel || uiState.showPartyPanel ||
                         uiState.showAudioOverlay || uiState.showSubtitleOverlay ||
                         uiState.showSubtitleStylePanel || uiState.showSpeedDialog ||
                         uiState.showSubtitleDelayOverlay || uiState.showSubtitleTimingDialog ||
@@ -950,6 +983,49 @@ fun PlayerScreen(
         val playerSurfaceShape = RoundedCornerShape(postPlayRecommendationPlayerCornerRadius)
         val playerSurfaceIsFullscreen = !postPlayRecommendationState.isVisible &&
             postPlayRecommendationPlayerWidth >= 0.999f
+        var subtitleControlsClearancePx by remember { mutableFloatStateOf(0f) }
+        var skipClearancePx by remember { mutableFloatStateOf(0f) }
+        var postPlayClearancePx by remember { mutableFloatStateOf(0f) }
+        var seekClearancePx by remember { mutableFloatStateOf(0f) }
+        val subtitleClearanceGapPx = with(LocalDensity.current) { SUBTITLE_CONTROLS_GAP.toPx() }
+        val postPlayOverlayMode = uiState.postPlayMode.takeIf {
+            uiState.error == null &&
+                !postPlayRecommendationState.isVisible &&
+                postPlayRecommendationState.recommendation == null &&
+                !shouldConfirmNextEpisodeOnEnd &&
+                !uiState.showLoadingOverlay &&
+                !uiState.showPauseOverlay &&
+                !uiState.showStreamInfoOverlay &&
+                !uiState.showEpisodesPanel &&
+                !uiState.showSourcesPanel &&
+                !uiState.showPartyPanel &&
+                !uiState.showAudioOverlay &&
+                !uiState.showSubtitleOverlay &&
+                !uiState.showSubtitleStylePanel &&
+                !uiState.showSubtitleDelayOverlay &&
+                !uiState.showSubtitleTimingDialog &&
+                !uiState.showSpeedDialog &&
+                !uiState.showMoreDialog
+        }
+        val seekOverlayVisible = uiState.showSeekOverlay && !uiState.showControls && uiState.error == null &&
+            !uiState.showLoadingOverlay && !uiState.showPauseOverlay &&
+            !uiState.showSubtitleDelayOverlay && !uiState.showSubtitleTimingDialog &&
+            !uiState.showMoreDialog &&
+            !uiState.isLive
+        val playerControlsVisible = uiState.showControls && uiState.error == null &&
+            !uiState.showLoadingOverlay && !uiState.showPauseOverlay &&
+            !uiState.showStreamInfoOverlay &&
+            !uiState.showSubtitleStylePanel &&
+            !uiState.showSubtitleDelayOverlay &&
+            !uiState.showEpisodesPanel &&
+            !uiState.showSourcesPanel &&
+            !uiState.showPartyPanel &&
+            !uiState.showAudioOverlay &&
+            !uiState.showSubtitleOverlay &&
+            !uiState.showSpeedDialog &&
+            !postPlayRecommendationState.isVisible &&
+            uiState.postPlayMode !is PostPlayMode.StillWatching
+        val fallbackSubtitleLiftPx = with(LocalDensity.current) { SUBTITLE_CONTROLS_LIFT.toPx() }
         val playerSurfaceModifier = Modifier
             .align(Alignment.TopEnd)
             .padding(end = postPlayRecommendationPlayerPadding, top = postPlayRecommendationPlayerPadding)
@@ -988,6 +1064,18 @@ fun PlayerScreen(
             }
 
             Box(modifier = playerSurfaceModifier) {
+                val subtitleLiftPx = computeSubtitleLiftPx(
+                    previewConfiguredPosition = uiState.showSubtitleOverlay || uiState.showSubtitleStylePanel,
+                    controlsVisible = playerControlsVisible,
+                    controlsClearancePx = subtitleControlsClearancePx,
+                    fallbackControlsLiftPx = fallbackSubtitleLiftPx,
+                    skipVisible = skipButtonActuallyVisible,
+                    skipClearancePx = skipClearancePx,
+                    postPlayVisible = postPlayOverlayMode != null,
+                    postPlayClearancePx = postPlayClearancePx,
+                    seekVisible = seekOverlayVisible,
+                    seekClearancePx = seekClearancePx
+                )
                 if (uiState.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER) {
                     MpvPlayerSurface(
                         viewModel = viewModel,
@@ -995,6 +1083,7 @@ fun PlayerScreen(
                         isBuffering = uiState.isBuffering,
                         aspectMode = uiState.aspectMode,
                         subtitleStyle = uiState.subtitleStyle,
+                        subtitleLiftPx = subtitleLiftPx,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -1010,6 +1099,7 @@ fun PlayerScreen(
                             useLibass = uiState.useLibass,
                             libassRenderType = uiState.libassRenderType,
                             subtitleStyle = uiState.subtitleStyle,
+                            subtitleLiftPx = subtitleLiftPx,
                             onBindSubtitleView = viewModel::bindExoSubtitleView,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -1250,26 +1340,10 @@ fun PlayerScreen(
                 .align(Alignment.BottomStart)
                 .padding(start = NuvioTheme.spacing.xxl, bottom = skipButtonBottomPadding)
                 .zIndex(2.1f)
+                .reportSubtitleClearance(subtitleClearanceGapPx) { skipClearancePx = it }
         )
         PostPlayOverlay(
-            mode = uiState.postPlayMode.takeIf {
-                uiState.error == null &&
-                    !postPlayRecommendationState.isVisible &&
-                    postPlayRecommendationState.recommendation == null &&
-                    !shouldConfirmNextEpisodeOnEnd &&
-                    !uiState.showLoadingOverlay &&
-                    !uiState.showPauseOverlay &&
-                    !uiState.showStreamInfoOverlay &&
-                    !uiState.showEpisodesPanel &&
-                    !uiState.showSourcesPanel &&
-                    !uiState.showAudioOverlay &&
-                    !uiState.showSubtitleOverlay &&
-                    !uiState.showSubtitleStylePanel &&
-                    !uiState.showSubtitleDelayOverlay &&
-                    !uiState.showSubtitleTimingDialog &&
-                    !uiState.showSpeedDialog &&
-                    !uiState.showMoreDialog
-            },
+            mode = postPlayOverlayMode,
             controlsVisible = uiState.showControls,
             blurUnwatchedEpisodes = uiState.blurUnwatchedEpisodes,
             nextEpisodeFocusRequester = nextEpisodeFocusRequester,
@@ -1281,7 +1355,8 @@ fun PlayerScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 26.dp, bottom = if (uiState.showControls) 122.dp else 30.dp)
-                .zIndex(2.1f),
+                .zIndex(2.1f)
+                .reportSubtitleClearance(subtitleClearanceGapPx) { postPlayClearancePx = it },
         )
 
         // Parental guide overlay (shows when video first starts playing)
@@ -1312,6 +1387,7 @@ fun PlayerScreen(
             !uiState.showPauseOverlay &&
             !uiState.showEpisodesPanel &&
             !uiState.showSourcesPanel &&
+            !uiState.showPartyPanel &&
             !uiState.showAudioOverlay &&
             !uiState.showSubtitleOverlay &&
             !uiState.showSubtitleStylePanel &&
@@ -1337,18 +1413,7 @@ fun PlayerScreen(
 
         // Controls overlay
         AnimatedVisibility(
-            visible = uiState.showControls && uiState.error == null &&
-                !uiState.showLoadingOverlay && !uiState.showPauseOverlay &&
-                !uiState.showStreamInfoOverlay &&
-                !uiState.showSubtitleStylePanel &&
-                !uiState.showSubtitleDelayOverlay &&
-                !uiState.showEpisodesPanel &&
-                !uiState.showSourcesPanel &&
-                !uiState.showAudioOverlay &&
-                !uiState.showSubtitleOverlay &&
-                !uiState.showSpeedDialog &&
-                !postPlayRecommendationState.isVisible &&
-                uiState.postPlayMode !is PostPlayMode.StillWatching,
+            visible = playerControlsVisible,
             enter = fadeIn(animationSpec = tween(200)),
             exit = fadeOut(animationSpec = tween(200))
         ) {
@@ -1356,6 +1421,7 @@ fun PlayerScreen(
             PlayerControlsOverlay(
                 uiState = uiState,
                 viewModel = viewModel,
+                onSubtitleClearanceChanged = { subtitleControlsClearancePx = it },
                 playPauseFocusRequester = playPauseFocusRequester,
                 progressBarFocusRequester = progressBarFocusRequester,
                 streamInfoFocusRequester = streamInfoFocusRequester,
@@ -1372,6 +1438,12 @@ fun PlayerScreen(
                 onSeekTo = { viewModel.onEvent(PlayerEvent.OnSeekTo(it)) },
                 onShowEpisodesPanel = { viewModel.onEvent(PlayerEvent.OnShowEpisodesPanel) },
                 onShowSourcesPanel = { viewModel.onEvent(PlayerEvent.OnShowSourcesPanel) },
+                onShowPartyPanel = if (partyAvailable && viewModel.canUseParty) {
+                    { viewModel.onEvent(PlayerEvent.OnShowPartyPanel) }
+                } else {
+                    null
+                },
+                partyActive = partyState.party != null,
                 onShowAudioDialog = { viewModel.controller.showSourceTrackPanel(qualityMode = false) },
                 onShowSubtitleDialog = { viewModel.onEvent(PlayerEvent.OnShowSubtitleOverlay) },
                 onShowSpeedDialog = { viewModel.onEvent(PlayerEvent.OnShowSpeedDialog) },
@@ -1448,6 +1520,35 @@ fun PlayerScreen(
             StreamSourceIndicator(text = uiState.streamSourceIndicatorText)
         }
 
+        partyState.party?.let { party ->
+            val waitingNames = if (partyPlayback?.paused == true && partyPlayback?.waiting == true) {
+                PartySync.waitingMemberIds(party, emptySet())
+                    .filter { it != party.memberId }
+                    .mapNotNull { id -> party.member(id)?.displayName }
+            } else {
+                emptyList()
+            }
+            val noticeText = partyNotice?.let { notice -> partyNoticeText(notice) }
+            val partyPausedBehind = uiState.partyBehind && !uiState.isPlaying && !uiState.isBuffering
+            PartyStatusPill(
+                visible = (uiState.showControls || waitingNames.isNotEmpty() || !party.connected || noticeText != null || partyPausedBehind) &&
+                    !uiState.showPartyPanel && uiState.error == null,
+                members = party.members,
+                message = when {
+                    !party.connected -> stringResource(R.string.party_reconnecting)
+                    waitingNames.isNotEmpty() -> stringResource(R.string.party_waiting_for, waitingNames.joinToString())
+                    partyPlayback?.waiting == true -> stringResource(R.string.party_waiting)
+                    noticeText != null -> noticeText
+                    partyPausedBehind -> stringResource(R.string.party_paused_for_you)
+                    uiState.partyBehind -> uiState.partyBehindMs?.let { stringResource(R.string.party_behind, formatPlaybackTime(it)) }
+                    else -> null
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 28.dp)
+            )
+        }
+
         AnimatedVisibility(
             visible = uiState.showPlayerEngineSwitchInfo && uiState.error == null,
             enter = fadeIn(animationSpec = tween(NuvioMotion.tokens.durations.fast)),
@@ -1472,6 +1573,7 @@ fun PlayerScreen(
                 !uiState.showSubtitleStylePanel &&
                 !uiState.showEpisodesPanel &&
                 !uiState.showSourcesPanel &&
+                !uiState.showPartyPanel &&
                 !uiState.showAudioOverlay &&
                 !uiState.showSubtitleOverlay &&
                 !uiState.showSubtitleTimingDialog &&
@@ -1506,14 +1608,12 @@ fun PlayerScreen(
         }
 
         AnimatedVisibility(
-            visible = uiState.showSeekOverlay && !uiState.showControls && uiState.error == null &&
-                !uiState.showLoadingOverlay && !uiState.showPauseOverlay &&
-                !uiState.showSubtitleDelayOverlay && !uiState.showSubtitleTimingDialog &&
-                !uiState.showMoreDialog &&
-                !uiState.isLive,
+            visible = seekOverlayVisible,
             enter = fadeIn(animationSpec = tween(150)),
             exit = fadeOut(animationSpec = tween(150)),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .reportSubtitleClearance(subtitleClearanceGapPx) { seekClearancePx = it }
         ) {
             SeekOverlayHost(viewModel = viewModel)
         }
@@ -1603,6 +1703,68 @@ fun PlayerScreen(
                     onAddonFilterSelected = { viewModel.onEvent(PlayerEvent.OnSourceAddonFilterSelected(it)) },
                     onStreamSelected = { viewModel.onEvent(PlayerEvent.OnSourceStreamSelected(it)) },
                     onExpandStreams = { viewModel.controller.expandSourceFilteredStreamsIfNeeded() },
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = uiState.showPartyPanel && uiState.error == null,
+            enter = fadeIn(animationSpec = tween(120)),
+            exit = fadeOut(animationSpec = tween(120))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+            )
+        }
+
+        AnimatedVisibility(
+            visible = uiState.showPartyPanel && uiState.error == null,
+            enter = slideInHorizontally(
+                animationSpec = tween(220),
+                initialOffsetX = { it }
+            ),
+            exit = slideOutHorizontally(
+                animationSpec = tween(220),
+                targetOffsetX = { it }
+            )
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                PartyPanel(
+                    state = partyState,
+                    profile = partyProfile,
+                    playerMedia = viewModel.partyMedia,
+                    isSupported = partyAvailable,
+                    canStart = partyCanUse,
+                    canShareStream = viewModel.currentPartyStream() != null,
+                    onStart = { viewModel.startParty() },
+                    onSwitchParty = { viewModel.switchParty() },
+                    onWatchWithParty = {
+                        partyState.party?.media?.let { media ->
+                            viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
+                            viewModel.stopAndRelease()
+                            onOpenPartyMedia(media)
+                        }
+                    },
+                    onLeave = {
+                        viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
+                        viewModel.party.leave()
+                    },
+                    onEnd = {
+                        viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
+                        viewModel.party.end()
+                    },
+                    onRemove = { member -> viewModel.party.removeMember(member.id) },
+                    onHostOnlyChange = { enabled -> viewModel.party.setHostOnly(enabled) },
+                    onSharingChange = { enabled -> viewModel.party.setSharing(enabled) },
+                    behindMs = if (uiState.partyBehind) uiState.partyBehindMs ?: 0L else null,
+                    onCatchUp = {
+                        viewModel.catchUpParty()
+                        viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
+                    },
+                    onClose = { viewModel.onEvent(PlayerEvent.OnDismissPartyPanel) },
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
@@ -1756,6 +1918,7 @@ fun PlayerScreen(
                 !uiState.showPauseOverlay &&
                 !uiState.showEpisodesPanel &&
                 !uiState.showSourcesPanel &&
+                !uiState.showPartyPanel &&
                 !uiState.showAudioOverlay &&
                 !uiState.showSubtitleOverlay &&
                 !uiState.showSubtitleStylePanel &&
@@ -1803,6 +1966,7 @@ private fun MpvPlayerSurface(
     isBuffering: Boolean,
     aspectMode: AspectMode,
     subtitleStyle: SubtitleStyleSettings,
+    subtitleLiftPx: Float,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1847,7 +2011,13 @@ private fun MpvPlayerSurface(
         mpvView.applyAspectMode(aspectMode)
     }
 
-    LaunchedEffect(mpvView, subtitleStyle) {
+    LaunchedEffect(mpvView, subtitleStyle, subtitleLiftPx) {
+        val height = mpvView.height
+        mpvView.subtitleLiftFraction = if (subtitleLiftPx > 0f && height > 0) {
+            (subtitleLiftPx / height).toDouble()
+        } else {
+            0.0
+        }
         mpvView.applySubtitleStyle(subtitleStyle)
     }
 }
@@ -1864,6 +2034,7 @@ private fun ExoPlayerSurface(
     useLibass: Boolean,
     libassRenderType: LibassRenderType,
     subtitleStyle: SubtitleStyleSettings,
+    subtitleLiftPx: Float,
     onBindSubtitleView: (androidx.media3.ui.SubtitleView?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -1873,6 +2044,7 @@ private fun ExoPlayerSurface(
     val latestTunneledSurfaceFill by rememberUpdatedState(tunneledSurfaceFill)
     val latestBindSubtitleView by rememberUpdatedState(onBindSubtitleView)
     val latestSubtitleStyle by rememberUpdatedState(subtitleStyle)
+    val latestSubtitleLiftPx by rememberUpdatedState(subtitleLiftPx)
     val playerView = remember(context, player) {
         PlayerView(context).apply {
             useController = false
@@ -1953,7 +2125,7 @@ private fun ExoPlayerSurface(
                 // Re-apply subtitle style when tracks change so style is applied
                 // even when subtitles are enabled after initial player setup.
                 playerView.post {
-                    playerView.applySubtitleStyleIfNeeded(latestSubtitleStyle, force = true)
+                    playerView.applySubtitleStyleIfNeeded(latestSubtitleStyle, latestSubtitleLiftPx, force = true)
                 }
             }
         }
@@ -2009,8 +2181,8 @@ private fun ExoPlayerSurface(
         )
     }
 
-    LaunchedEffect(playerView, subtitleStyle) {
-        playerView.applySubtitleStyleIfNeeded(subtitleStyle)
+    LaunchedEffect(playerView, subtitleStyle, subtitleLiftPx) {
+        playerView.applySubtitleStyleIfNeeded(subtitleStyle, subtitleLiftPx)
     }
 }
 
@@ -2044,8 +2216,20 @@ private fun PlayerView.syncExoSurfaceLayout(
 
 private data class SubtitleAppliedConfig(
     val style: SubtitleStyleSettings,
-    val isAss: Boolean
+    val isAss: Boolean,
+    val liftPx: Float
 )
+
+private val SUBTITLE_CONTROLS_LIFT = 130.dp
+private val SUBTITLE_CONTROLS_GAP = 8.dp
+
+private fun Modifier.reportSubtitleClearance(gapPx: Float, onClearance: (Float) -> Unit): Modifier =
+    onGloballyPositioned { coordinates ->
+        val rootHeight = coordinates.findRootCoordinates().size.height
+        if (rootHeight > 0 && coordinates.size.height > 0) {
+            onClearance((rootHeight - coordinates.boundsInRoot().top + gapPx).coerceAtLeast(0f))
+        }
+    }
 
 private fun PlayerView.isAssOrSsaSubtitleSelected(): Boolean {
     val currentTracks = player?.currentTracks
@@ -2079,10 +2263,11 @@ private fun PlayerView.isAssOrSsaSubtitleSelected(): Boolean {
 
 private fun PlayerView.applySubtitleStyleIfNeeded(
     subtitleStyle: SubtitleStyleSettings,
+    liftPx: Float,
     force: Boolean = false
 ) {
     val isAss = isAssOrSsaSubtitleSelected()
-    val config = SubtitleAppliedConfig(subtitleStyle, isAss)
+    val config = SubtitleAppliedConfig(subtitleStyle, isAss, liftPx)
     if (!force && getTag(R.id.player_view_subtitle_style_tag) == config) {
         return
     }
@@ -2131,6 +2316,12 @@ private fun PlayerView.applySubtitleStyleIfNeeded(
         post {
             val extraPadding = (height * (subtitleStyle.verticalOffset / 400f)).toInt().coerceAtLeast(0)
             setPadding(paddingLeft, paddingTop, paddingRight, extraPadding)
+            val availableHeight = height - extraPadding
+            if (liftPx > 0f && availableHeight > 0) {
+                setBottomPaddingFraction(
+                    maxOf(bottomPaddingFraction, (liftPx - extraPadding) / availableHeight).coerceIn(0f, 0.5f)
+                )
+            }
         }
     }
 }
@@ -2227,6 +2418,8 @@ private fun PlayerControlsOverlay(
     onSeekTo: (Long) -> Unit,
     onShowEpisodesPanel: () -> Unit,
     onShowSourcesPanel: () -> Unit,
+    onShowPartyPanel: (() -> Unit)?,
+    partyActive: Boolean,
     onShowAudioDialog: () -> Unit,
     onShowSubtitleDialog: () -> Unit,
     onShowSpeedDialog: () -> Unit,
@@ -2240,8 +2433,12 @@ private fun PlayerControlsOverlay(
     onHideControls: () -> Unit,
     onBack: () -> Unit,
     reportCodeVisible: Boolean,
-    skipButtonVisible: Boolean = false
+    skipButtonVisible: Boolean = false,
+    onSubtitleClearanceChanged: (Float) -> Unit = {}
 ) {
+    val density = LocalDensity.current
+    val clearanceOffsetPx = with(density) { (NuvioTheme.spacing.xl - SUBTITLE_CONTROLS_GAP).toPx() }
+    val latestClearanceCallback by rememberUpdatedState(onSubtitleClearanceChanged)
     val customPlayPainter = rememberRawSvgPainter(R.raw.ic_player_play)
     val customPausePainter = rememberRawSvgPainter(R.raw.ic_player_pause)
     val customSubtitlePainter = rememberRawSvgPainter(R.raw.ic_player_subtitles)
@@ -2294,6 +2491,13 @@ private fun PlayerControlsOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .onGloballyPositioned { coordinates ->
+                    val rootHeight = coordinates.findRootCoordinates().size.height
+                    val top = coordinates.boundsInRoot().top
+                    if (rootHeight > 0) {
+                        latestClearanceCallback((rootHeight - top - clearanceOffsetPx).coerceAtLeast(0f))
+                    }
+                }
                 .padding(horizontal = NuvioTheme.spacing.xxl, vertical = NuvioTheme.spacing.xl)
         ) {
             val skipIntroVisible = uiState.activeSkipInterval != null
@@ -2500,6 +2704,18 @@ private fun PlayerControlsOverlay(
                         )
                     }
 
+                    if (onShowPartyPanel != null) {
+                        ControlButton(
+                            icon = Icons.Rounded.Groups,
+                            contentDescription = stringResource(R.string.party_title),
+                            onClick = onShowPartyPanel,
+                            upFocusRequester = progressUpTarget,
+                            onDownKey = onHideControls,
+                            onFocused = onResetHideTimer,
+                            contentColor = if (partyActive) NuvioTheme.colors.Secondary else Color.White
+                        )
+                    }
+
                     AnimatedVisibility(
                         visible = uiState.showMoreDialog,
                         enter = slideInHorizontally(
@@ -2692,7 +2908,8 @@ private fun ControlButton(
     upFocusRequester: FocusRequester? = null,
     enabled: Boolean = true,
     onDownKey: (() -> Unit)? = null,
-    onFocused: (() -> Unit)? = null
+    onFocused: (() -> Unit)? = null,
+    contentColor: Color = Color.White
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
@@ -2740,7 +2957,7 @@ private fun ControlButton(
         colors = IconButtonDefaults.colors(
             containerColor = Color.Transparent,
             focusedContainerColor = Color.White,
-            contentColor = Color.White,
+            contentColor = contentColor,
             focusedContentColor = Color.Black
         ),
         shape = IconButtonDefaults.shape(shape = CircleShape)
@@ -2800,7 +3017,7 @@ private fun ProgressBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (isFocused) NuvioTheme.spacing.md else NuvioTheme.spacing.sm)
+            .height(NuvioTheme.spacing.md)
             .then(
                 if (focusRequester != null) Modifier.focusRequester(focusRequester)
                 else Modifier
@@ -2899,19 +3116,26 @@ private fun ProgressBar(
                 } else {
                     false
                 }
-            }
-            .clip(RoundedCornerShape(3.dp))
-            .background(
-                if (isFocused) Color.White.copy(alpha = 0.45f)
-                else Color.White.copy(alpha = 0.3f)
-            )
-            .playerProgressFill(
-                progress = { animatedProgress },
-                bufferedProgress = { animatedBufferedProgress },
-                bufferedColor = NuvioTheme.colors.Secondary,
-                playedBrush = accentBrush
-            )
-    )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (isFocused) NuvioTheme.spacing.md else NuvioTheme.spacing.sm)
+                .clip(RoundedCornerShape(3.dp))
+                .background(
+                    if (isFocused) Color.White.copy(alpha = 0.45f)
+                    else Color.White.copy(alpha = 0.3f)
+                )
+                .playerProgressFill(
+                    progress = { animatedProgress },
+                    bufferedProgress = { animatedBufferedProgress },
+                    bufferedColor = NuvioTheme.colors.Secondary,
+                    playedBrush = accentBrush
+                )
+        )
+    }
 }
 
 @Composable
@@ -3817,6 +4041,17 @@ internal fun DialogButton(
         )
     }
 }
+
+@Composable
+private fun partyNoticeText(notice: PartyNotice): String = when (notice.action) {
+    PartyAction.Paused -> stringResource(R.string.party_action_paused, notice.name)
+    PartyAction.Resumed -> stringResource(R.string.party_action_resumed, notice.name)
+    PartyAction.Seeked -> stringResource(R.string.party_action_seeked, notice.name, formatTime(notice.positionMs))
+    PartyAction.Speed -> stringResource(R.string.party_action_speed, notice.name, formatSpeedLabel(notice.rate))
+}
+
+private fun formatSpeedLabel(rate: Float): String =
+    if (rate % 1f == 0f) "${rate.toInt()}x" else "${rate}x"
 
 private fun formatTime(millis: Long): String {
     if (millis <= 0) return "0:00"

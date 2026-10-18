@@ -93,7 +93,8 @@ class ProfileSelectionViewModel @Inject constructor(
     private val _isPinOperationInProgress = MutableStateFlow(false)
     val isPinOperationInProgress: StateFlow<Boolean> = _isPinOperationInProgress.asStateFlow()
 
-    // Fork: declared before init, whose collector runs right away on Main.immediate (crashed on launch).
+    // Declared before init: the theme collector below can emit synchronously on
+    // Main.immediate when the theme stores are already cached.
     private val _profileThemes = MutableStateFlow<Map<Int, com.nuvio.tv.domain.model.AppTheme>>(emptyMap())
     val profileThemes: StateFlow<Map<Int, com.nuvio.tv.domain.model.AppTheme>> = _profileThemes.asStateFlow()
 

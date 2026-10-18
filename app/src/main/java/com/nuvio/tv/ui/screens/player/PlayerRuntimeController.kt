@@ -105,6 +105,7 @@ class PlayerRuntimeController(
     internal val tvRecommendationManager: com.nuvio.tv.core.recommendations.TvRecommendationManager,
     internal val serverPlayback: ServerPlayback,
     internal val serverStreams: ServerStreams,
+    internal val party: com.nuvio.tv.core.party.PartyRepository,
     internal val profileId: Int,
     savedStateHandle: SavedStateHandle,
     internal val scope: CoroutineScope
@@ -192,7 +193,9 @@ class PlayerRuntimeController(
     internal val rememberedAudioLanguage: String? = navigationArgs.rememberedAudioLanguage
     internal val rememberedAudioName: String? = navigationArgs.rememberedAudioName
     internal val cloudSessionToken: String? = navigationArgs.cloudSessionToken
-    internal val mediaSourceFactory = PlayerMediaSourceFactory(context.applicationContext)
+    internal val mediaSourceFactory = PlayerMediaSourceFactory(context.applicationContext).apply {
+        onStreamRedirected = { requestedUrl, resolvedUrl -> handleStreamRedirect(requestedUrl, resolvedUrl) }
+    }
 
     // The file rate is the only one every container reports, so the playhead is placed in the
     // file by how far through it is rather than by any declared bitrate.
@@ -254,6 +257,7 @@ class PlayerRuntimeController(
     fun getCurrentHeaders(): Map<String, String> = currentHeaders
 
     fun stopAndRelease() {
+        leavePartyPlayback()
         // Cache counters only reach the card on a natural finish, so capture them when the user exits too.
         val diagnostics = lastPlaybackDiagnosticsForReport
         if (diagnostics.timestampMs > 0L) {
@@ -424,10 +428,14 @@ class PlayerRuntimeController(
     internal val afrPreflightGate = AfrPreflightGate()
     internal var hideAspectRatioIndicatorJob: Job? = null
     internal var hideStreamSourceIndicatorJob: Job? = null
+    internal var partyRateNudge: Float? = null
+    internal var partyPreviousKey: String? = null
     internal var hidePlayerEngineSwitchInfoJob: Job? = null
     internal var hideSubtitleDelayOverlayJob: Job? = null
     internal var subtitleAutoSyncLoadJob: Job? = null
     internal var automaticSubtitleSyncJob: Job? = null // AutoSync hook
+    /** mpv: the add-on subtitle download and sub-add in flight, which AutoSync lets land first. */
+    internal var mpvAddonSubtitleSelectionJob: Job? = null // AutoSync hook
     /** ExoPlayer sidecar path: external addon cues without setMediaSource (preserves buffer). */
     internal var sidecarSubtitleJob: Job? = null
     internal var sidecarGenerationCounter: Long = 0L // AutoSync hook
@@ -600,6 +608,7 @@ class PlayerRuntimeController(
     internal var mpvMediaLoadPrepared: Boolean = false
     internal var mpvTrackRefreshJob: Job? = null
     internal var mpvTrackRefreshInProgress: Boolean = false
+    internal val mpvTrackRefreshGate = MpvTrackRefreshGate()
     internal var pendingMpvHardRestartOnNextAttach: Boolean = false
     internal var mpvEventRelay: MpvEventRelay? = null
     internal var mpvEventRelayEpoch: Long = 0
@@ -741,6 +750,7 @@ class PlayerRuntimeController(
             fetchMetaDetails(contentId, contentType)
         }
         observeBlurUnwatchedEpisodes()
+        observeEpisodeOptionsOverlayStyle()
         observeEpisodeWatchProgress()
         observeTorrentSettings()
         observeStreamBadgeSettings()
