@@ -262,7 +262,7 @@ internal fun PlayerRuntimeController.isSourceTroubleShown(): Boolean =
 internal fun PlayerRuntimeController.ensureSourceStallWatch() {
     if (sourceFailover.stallWatchJob?.isActive == true) return
     sourceFailover.stallWatchJob = scope.launch {
-        var lastSignal: Int? = null
+        var progress: StallProgress? = null
         var stillSinceMs = 0L
         while (isActive) {
             delay(StallPollMs)
@@ -276,35 +276,49 @@ internal fun PlayerRuntimeController.ensureSourceStallWatch() {
                 !state.showSourcesPanel && !state.showEpisodesPanel &&
                 !failover.inProgress && failover.troubleKey != key
             if (!waiting) {
-                lastSignal = null
+                progress = null
                 continue
             }
             val timeline = _playbackTimeline.value
-            val signal = listOf(
-                key,
-                timeline.currentPosition,
-                timeline.bufferedPosition,
-                _exoPlayer?.currentPosition,
-                _exoPlayer?.bufferedPosition,
-                mpvView?.demuxerCacheDurationSec(),
-                state.torrentBufferProgress,
-                state.torrentTotalProgress,
-            ).hashCode()
+            val current = StallProgress(
+                key = key,
+                positionMs = maxOf(timeline.currentPosition, _exoPlayer?.currentPosition ?: 0L),
+                bufferedPositionMs = maxOf(timeline.bufferedPosition, _exoPlayer?.bufferedPosition ?: 0L),
+                mpvCacheMs = ((mpvView?.demuxerCacheDurationSec() ?: 0.0) * 1000).toLong(),
+                torrentProgress = state.torrentBufferProgress + state.torrentTotalProgress,
+            )
             val now = SystemClock.elapsedRealtime()
-            if (signal != lastSignal) {
-                lastSignal = signal
+            val start = progress
+            if (start == null || current.movedPast(start)) {
+                progress = current
                 stillSinceMs = now
                 continue
             }
             val timeoutMs = if (state.isTorrentStream) TorrentStallTimeoutMs else StallTimeoutMs
             if (now - stillSinceMs < timeoutMs) continue
-            lastSignal = null
+            progress = null
             // Once per source, even when there is no list to offer.
             failover.troubleKey = key
             Log.w(PlayerRuntimeController.TAG, "Source stall: no progress for ${timeoutMs / 1000}s on ${state.currentStreamName}")
             tryAutoSourceFailover(context.getString(R.string.player_source_stalled))
         }
     }
+}
+
+/** Where the stuck source stands; only real progress counts, not the jitter of a cache that never fills. */
+private class StallProgress(
+    val key: String,
+    val positionMs: Long,
+    val bufferedPositionMs: Long,
+    val mpvCacheMs: Long,
+    val torrentProgress: Float,
+) {
+    fun movedPast(start: StallProgress): Boolean =
+        key != start.key ||
+            positionMs - start.positionMs >= 1_000L ||
+            bufferedPositionMs - start.bufferedPositionMs >= 2_000L ||
+            mpvCacheMs - start.mpvCacheMs >= 2_000L ||
+            torrentProgress - start.torrentProgress >= 0.001f
 }
 
 /**
