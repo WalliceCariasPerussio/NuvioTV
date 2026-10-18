@@ -491,6 +491,62 @@ class TraktAuthService @Inject constructor(
         return executeAuthorizedRequest(call)
     }
 
+    /**
+     * Fork: [executeAuthorizedWriteRequest] for a write that is not idempotent (a history add adds a play each
+     * time). It is never sent again once it may have reached Trakt: a network error returns null and a 5xx is
+     * returned as is. Only a 401 (after a token refresh) and a 429 are retried, as Trakt recorded nothing.
+     */
+    suspend fun <T> executeAuthorizedWriteRequestOnce(
+        call: suspend (authorizationHeader: String) -> Response<T>
+    ): Response<T>? {
+        if (isCircuitOpen()) {
+            trace("authorized write once: circuit breaker is OPEN, skipping request")
+            return null
+        }
+        var token = getValidAccessToken() ?: return null
+        var retriedAuth = false
+        var retriedRateLimit = false
+
+        while (true) {
+            writeRequestMutex.withLock {
+                val waitMs = (lastWriteRequestAtMs + minWriteIntervalMs - System.currentTimeMillis()).coerceAtLeast(0L)
+                if (waitMs > 0L) delay(waitMs)
+                lastWriteRequestAtMs = System.currentTimeMillis()
+            }
+            acquireGetRateSlot()
+
+            val response = try {
+                call("Bearer $token")
+            } catch (e: IOException) {
+                Log.w("TraktAuthService", "Network error during a write sent once; not retried", e)
+                return null
+            }
+
+            if (response.isSuccessful) {
+                resetCircuit()
+                return response
+            }
+
+            val code = response.code()
+            if (code == 401 && !retriedAuth) {
+                if (refreshTokenIfNeeded(force = true)) {
+                    token = getCurrentAuthState().accessToken ?: return response
+                    retriedAuth = true
+                    continue
+                }
+                tripCircuit("401 Unauthorized and token refresh failed for ${responseTarget(response)}")
+                return response
+            }
+            if (code == 429 && !retriedRateLimit) {
+                delayForRetryAfter(response = response, fallbackSeconds = 2L, maxSeconds = 60L)
+                retriedRateLimit = true
+                continue
+            }
+            if (code == 403 || code == 423) tripCircuit("$code for ${responseTarget(response)}")
+            return response
+        }
+    }
+
     private suspend fun getValidAccessToken(): String? {
         val state = getCurrentAuthState()
         if (state.accessToken.isNullOrBlank()) return null

@@ -378,15 +378,18 @@ class NuvioToTraktSyncService @Inject constructor(
                 watchedKey(item.contentType, item.contentId, item.season, item.episode) in alreadyThere
             }
             if (toSend.isEmpty()) return@forEach
-            // Marked before the request: if it times out after Trakt processed it, a re-run must not add it again.
-            markHistorySent(profileId, toSend)
-            val response = traktAuthService.executeAuthorizedWriteRequest { authHeader ->
+            // Sent once, never retried after it may have reached Trakt (a retry would add a second play).
+            val response = traktAuthService.executeAuthorizedWriteRequestOnce { authHeader ->
+                // Marked as the request goes out: if it times out after Trakt processed it, a re-run must not add
+                // it again. Not before: a batch that never left (no token, circuit open) stays on offer.
+                markHistorySent(profileId, toSend)
                 traktApi.addHistory(authHeader, historyRequest(toSend))
             }
             if (response == null) throw IOException("Trakt history add got no answer")
             if (!response.isSuccessful) {
-                // Trakt answered with an error, so nothing was recorded and the batch can be offered again.
-                unmarkHistorySent(profileId, toSend)
+                // A 4xx means Trakt recorded nothing, so the batch can be offered again. A 5xx (or a gateway's 52x)
+                // can come after it did: the batch stays marked as maybe sent.
+                if (response.code() in 400..499) unmarkHistorySent(profileId, toSend)
                 throw IOException("Trakt history add failed (${response.code()})")
             }
             val added = response.body()?.added
