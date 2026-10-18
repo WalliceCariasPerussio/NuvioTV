@@ -269,7 +269,9 @@ internal fun PlayerRuntimeController.ensureSourceStallWatch() {
             val state = _uiState.value
             val key = state.currentFailoverKey()
             val failover = sourceFailover
-            val waiting = key != null && state.isBuffering && state.error.isNullOrBlank() &&
+            // Live streams have their own reconnects; this is for a title's sources.
+            val live = state.isLive || LivePlaybackUiPolicy.isLiveContentType(contentType)
+            val waiting = key != null && state.isBuffering && state.error.isNullOrBlank() && !live &&
                 !userPausedManually && _exoPlayer?.playWhenReady != false &&
                 !state.showSourcesPanel && !state.showEpisodesPanel &&
                 !failover.inProgress && failover.troubleKey != key
