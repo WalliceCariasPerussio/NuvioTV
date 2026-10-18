@@ -38,4 +38,5 @@ internal fun PlayerRuntimeController.releasePlayerStreamSearches() {
 }
 
 /** A failed stream may come from a stale search, so the sources panel searches again. */
-internal fun PlayerRuntimeController.isPlaybackFailed(): Boolean = !_uiState.value.error.isNullOrBlank()
+internal fun PlayerRuntimeController.isPlaybackFailed(): Boolean =
+    !_uiState.value.error.isNullOrBlank() || isSourceTroubleShown() // fork: PlayerSourceFailover.kt

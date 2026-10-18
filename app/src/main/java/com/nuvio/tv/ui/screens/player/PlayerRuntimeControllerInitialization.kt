@@ -161,6 +161,7 @@ internal fun PlayerRuntimeController.initializePlayer(
     }
     mpvMediaLoadPrepared = false
     val afrPreflightToken = afrPreflightGate.token()
+    ensureSourceStallWatch() // fork: PlayerSourceFailover.kt
 
     scope.launch {
         try {

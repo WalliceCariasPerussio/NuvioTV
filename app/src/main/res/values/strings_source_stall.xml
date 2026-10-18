@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: a source that fails or buffers forever puts the source list up (PlayerSourceFailover.kt). -->
+<resources>
+    <string name="player_source_stalled">This source is not loading. Pick another one.</string>
+    <string name="player_source_failed">This source failed to play. Pick another one.</string>
+</resources>

@@ -1,7 +1,11 @@
 package com.nuvio.tv.ui.screens.player
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
+import com.nuvio.tv.R
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.domain.model.Stream
@@ -10,7 +14,9 @@ import com.nuvio.tv.ui.screens.stream.autoPlayAudioLanguages
 import com.nuvio.tv.ui.screens.stream.bucket
 import com.nuvio.tv.ui.screens.stream.rankSourceStreams
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -29,6 +35,12 @@ private const val ShortClipCheckAfterMs = 2_000L
 private const val MaxRealClipBytesPerSecond = 6_000_000L
 /** Addon links expire: a source list older than this is searched again before switching. */
 private const val SourceListMaxAgeMs = 2 * 60 * 60 * 1_000L
+/** Buffering with nothing arriving for this long is a dead source, not a slow one. */
+private const val StallTimeoutMs = 45_000L
+/** A torrent needs longer to find peers and fetch its first pieces. */
+private const val TorrentStallTimeoutMs = 90_000L
+private const val StallPollMs = 1_000L
+private val sourceTroubleToastHandler = Handler(Looper.getMainLooper())
 
 internal class SourceFailoverState(
     /** The player opened on a source picked by hand on the stream screen. */
@@ -51,6 +63,10 @@ internal class SourceFailoverState(
     var sourceListCompletedAtMs = 0L
     /** Bumped by [cancel]: a failover coroutine of an older generation stops. */
     var generation = 0
+    /** The player's whole-session watch for a source stuck buffering (see [ensureSourceStallWatch]). */
+    var stallWatchJob: Job? = null
+    /** Source whose failure already put the source list up: the stall watch fires once per source. */
+    var troubleKey: String? = null
 
     fun cancel() {
         generation++
@@ -73,13 +89,23 @@ internal fun PlayerRuntimeController.currentEpisodeKey(): String =
 
 /**
  * Called right before a fatal playback error is shown ([errorMessage]), or with null for an addon's
- * error clip (see [onShortClipPlaying]); true when another source takes over (for an error clip,
- * also when the source list is shown instead). [showSwitchToMpv] is what the error path would show,
- * for when no other source is left.
+ * error clip (see [onShortClipPlaying]); true when another source takes over, or when the source list
+ * is shown instead of the error. [showSwitchToMpv] is what the error path would show, for when no
+ * other source is left.
  */
 internal fun PlayerRuntimeController.tryAutoSourceFailover(
     errorMessage: String?,
     showSwitchToMpv: Boolean = false,
+): Boolean {
+    if (tryAutoSourceSwitch(errorMessage, showSwitchToMpv)) return true
+    // No automatic switch (a source picked by hand, another autoplay mode, the tries used up): the source
+    // list instead of the error screen, unless that screen offers a fix of its own (switching to MPV).
+    return errorMessage != null && !showSwitchToMpv && offerOtherSources(stalled = isStallMessage(errorMessage))
+}
+
+private fun PlayerRuntimeController.tryAutoSourceSwitch(
+    errorMessage: String?,
+    showSwitchToMpv: Boolean,
 ): Boolean {
     val settings = latestPlayerSettings ?: return false
     if (settings.streamAutoPlayMode != StreamAutoPlayMode.BEST_PREFERRED_AUDIO) return false
@@ -178,6 +204,7 @@ private fun PlayerRuntimeController.onFailoverExhausted(errorMessage: String?, s
         showSourcesPanel()
         return
     }
+    if (!showSwitchToMpv && offerOtherSources(stalled = isStallMessage(errorMessage))) return
     _uiState.update {
         it.copy(
             error = errorMessage,
@@ -190,6 +217,91 @@ private fun PlayerRuntimeController.onFailoverExhausted(errorMessage: String?, s
             playbackEnded = false,
             postPlayMode = null,
         )
+    }
+}
+
+/**
+ * A source that failed or never started, with no automatic switch: says so and puts the source list up
+ * instead of the error screen, which only leaves the player. False when there is no list to offer.
+ */
+private fun PlayerRuntimeController.offerOtherSources(stalled: Boolean): Boolean {
+    if (contentType.equals("cloud", ignoreCase = true) || currentStreamSearchTarget() == null) return false
+    val key = _uiState.value.currentFailoverKey() ?: return false
+    sourceFailover.troubleKey = key
+    _uiState.update {
+        it.copy(
+            error = null,
+            showLoadingOverlay = false,
+            showPauseOverlay = false,
+            isBuffering = false,
+            loadingIssueReportVisible = false,
+            loadingIssueElapsedMs = 0L,
+            playbackEnded = false,
+            postPlayMode = null,
+        )
+    }
+    showSourcesPanel()
+    val message = context.getString(if (stalled) R.string.player_source_stalled else R.string.player_source_failed)
+    sourceTroubleToastHandler.post { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
+    return true
+}
+
+private fun PlayerRuntimeController.isStallMessage(message: String): Boolean =
+    message == context.getString(R.string.player_source_stalled)
+
+/** The source list is up because the source playing failed: it searches again (see isPlaybackFailed). */
+internal fun PlayerRuntimeController.isSourceTroubleShown(): Boolean =
+    sourceFailover.troubleKey?.let { it == _uiState.value.currentFailoverKey() } == true
+
+/**
+ * Buffering that never ends (a dead link, a torrent without peers) used to wait forever. Called with each
+ * stream; one watch runs for the whole player. After [StallTimeoutMs] in which neither the position, the
+ * buffer nor the torrent's download moved, the source counts as failed: the next one plays in the automatic
+ * mode, else the source list opens.
+ */
+internal fun PlayerRuntimeController.ensureSourceStallWatch() {
+    if (sourceFailover.stallWatchJob?.isActive == true) return
+    sourceFailover.stallWatchJob = scope.launch {
+        var lastSignal: Int? = null
+        var stillSinceMs = 0L
+        while (isActive) {
+            delay(StallPollMs)
+            val state = _uiState.value
+            val key = state.currentFailoverKey()
+            val failover = sourceFailover
+            val waiting = key != null && state.isBuffering && state.error.isNullOrBlank() &&
+                !userPausedManually && _exoPlayer?.playWhenReady != false &&
+                !state.showSourcesPanel && !state.showEpisodesPanel &&
+                !failover.inProgress && failover.troubleKey != key
+            if (!waiting) {
+                lastSignal = null
+                continue
+            }
+            val timeline = _playbackTimeline.value
+            val signal = listOf(
+                key,
+                timeline.currentPosition,
+                timeline.bufferedPosition,
+                _exoPlayer?.currentPosition,
+                _exoPlayer?.bufferedPosition,
+                mpvView?.demuxerCacheDurationSec(),
+                state.torrentBufferProgress,
+                state.torrentTotalProgress,
+            ).hashCode()
+            val now = SystemClock.elapsedRealtime()
+            if (signal != lastSignal) {
+                lastSignal = signal
+                stillSinceMs = now
+                continue
+            }
+            val timeoutMs = if (state.isTorrentStream) TorrentStallTimeoutMs else StallTimeoutMs
+            if (now - stillSinceMs < timeoutMs) continue
+            lastSignal = null
+            // Once per source, even when there is no list to offer.
+            failover.troubleKey = key
+            Log.w(PlayerRuntimeController.TAG, "Source stall: no progress for ${timeoutMs / 1000}s on ${state.currentStreamName}")
+            tryAutoSourceFailover(context.getString(R.string.player_source_stalled))
+        }
     }
 }
 
