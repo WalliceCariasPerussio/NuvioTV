@@ -181,6 +181,21 @@ internal fun StreamSourcesSidePanel(
         }
     }
 
+    // Fork: nothing in the panel had focus (it opened with the list empty or still loading, or the
+    // focused source left the list), so the D-pad went nowhere. Take it back: the first source,
+    // else the retry chip, else "Fechar".
+    var panelHasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(panelHasFocus, firstStreamKey, uiState.isLoadingSourceStreams, uiState.showSourcesPanel) {
+        if (panelHasFocus || !uiState.showSourcesPanel) return@LaunchedEffect
+        withFrameNanos { }
+        fun FocusRequester.tryFocus() = runCatching { requestFocus() }.getOrDefault(false)
+        val focusedFirstStream = firstStreamKey != null && !uiState.isLoadingSourceStreams &&
+            streamFocusRequesters[firstStreamKey]?.tryFocus() == true
+        if (!focusedFirstStream && !refreshFocusRequester.tryFocus()) {
+            closeButtonFocusRequester.tryFocus()
+        }
+    }
+
     fun requestChipFocus(index: Int) {
         if (index !in chipFocusRequesters.indices) return
         userMovedFromFirstResult = true
@@ -218,6 +233,7 @@ internal fun StreamSourcesSidePanel(
             .width(520.dp)
             .clip(RoundedCornerShape(topStart = NuvioTheme.spacing.lg, bottomStart = NuvioTheme.spacing.lg))
             .background(NuvioTheme.colors.BackgroundElevated)
+            .onFocusChanged { panelHasFocus = it.hasFocus }
     ) {
         Column(modifier = Modifier.padding(NuvioTheme.spacing.xl)) {
             Row(
