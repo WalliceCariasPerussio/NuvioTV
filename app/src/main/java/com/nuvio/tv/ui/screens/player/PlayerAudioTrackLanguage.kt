@@ -105,13 +105,20 @@ internal fun findTitledAudioTrackIndex(tracks: List<TrackInfo>, languages: List<
 
 /**
  * The engines choose the audio by tag (ExoPlayer's preferred languages, mpv's alang). When a title
- * names another language than its tag, the track is picked here, once per stream. A saved or
- * requested choice is left to the restore pass that follows.
+ * names another language than its tag, the track is picked here, once per stream load. A saved or
+ * requested choice is left to the restore pass that follows, which calls back with
+ * [savedChoiceMissing] when no track matches it.
  */
-internal fun PlayerRuntimeController.applyTitledAudioTrack(audioTracks: List<TrackInfo>) {
-    if (audioTracks.isEmpty() || titledAudioStreamUrl == currentStreamUrl) return
-    titledAudioStreamUrl = currentStreamUrl
-    if (persistedTrackPreference?.audio != null || pendingEngineSwitchTrackPreference != null) return
+internal fun PlayerRuntimeController.applyTitledAudioTrack(
+    audioTracks: List<TrackInfo>,
+    savedChoiceMissing: Boolean = false,
+) {
+    if (audioTracks.isEmpty()) return
+    if (!savedChoiceMissing) {
+        if (titledAudioStreamUrl == currentStreamUrl) return
+        titledAudioStreamUrl = currentStreamUrl
+        if (persistedTrackPreference?.audio != null || pendingEngineSwitchTrackPreference != null) return
+    }
     if (audioTracks.none { it.titleOverridesTag() }) return
     val index = findTitledAudioTrackIndex(audioTracks, mpvPreferredAudioLanguages)
     if (index < 0 || audioTracks[index].isSelected) return

@@ -1001,6 +1001,7 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
                 )
                 Log.d(PlayerRuntimeController.TAG, "TRACK_PREF restore: audio no match for lang=${audioSelection.language} name=${audioSelection.name}, clearing")
                 updatedPending = updatedPending.copy(audio = null)
+                applyTitledAudioTrack(audioTracks, savedChoiceMissing = true) // fork: PlayerAudioTrackLanguage.kt
             }
         }
     }

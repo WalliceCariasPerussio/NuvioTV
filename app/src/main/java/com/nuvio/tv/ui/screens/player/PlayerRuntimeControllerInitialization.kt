@@ -163,6 +163,7 @@ internal fun PlayerRuntimeController.initializePlayer(
     mpvMediaLoadPrepared = false
     val afrPreflightToken = afrPreflightGate.token()
     ensureSourceStallWatch() // fork: PlayerSourceFailover.kt
+    titledAudioStreamUrl = null // fork: a new load chooses by track title again (PlayerAudioTrackLanguage.kt)
 
     scope.launch {
         try {
