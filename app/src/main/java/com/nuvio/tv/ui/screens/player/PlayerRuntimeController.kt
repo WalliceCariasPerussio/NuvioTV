@@ -583,6 +583,8 @@ class PlayerRuntimeController(
     internal var currentStreamBingeGroup: String? = navigationArgs.bingeGroup
     // Fork: the source playing, once picked inside the player (the next episode keeps it).
     internal var currentPlayingStream: com.nuvio.tv.domain.model.Stream? = null
+    // Fork: the stream whose audio was already chosen by track title (PlayerAudioTrackLanguage.kt).
+    internal var titledAudioStreamUrl: String? = null
     // Per-device delay + current stream's behaviorHints.audioDelayMs + the user's tweak on that stream.
     internal var audioDelayParts: AudioDelayParts = AudioDelayParts().withStream(navigationArgs.audioDelayMs ?: 0)
     internal var hasAppliedRememberedAudioSelection: Boolean = false

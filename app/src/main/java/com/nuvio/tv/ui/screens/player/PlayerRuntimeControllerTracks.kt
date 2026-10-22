@@ -935,6 +935,7 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
     subtitleTracks: List<TrackInfo>
 ) {
     applyRequestedSourceAudioLanguage(audioTracks) // fork
+    applyTitledAudioTrack(audioTracks) // fork: PlayerAudioTrackLanguage.kt
     val switchPending = pendingEngineSwitchTrackPreference
         ?.takeIf { it.streamUrl == currentStreamUrl }
     if (pendingEngineSwitchTrackPreference != null && switchPending == null) {
@@ -975,6 +976,7 @@ internal fun PlayerRuntimeController.applyPersistedTrackPreference(
             Log.d(PlayerRuntimeController.TAG, "TRACK_PREF restore: audio deferred (no tracks yet)")
         } else {
             val index = findMatchingTrackIndex(audioTracks, audioSelection)
+                .let { titledSavedAudioTrackIndex(audioTracks, audioSelection, it) } // fork: PlayerAudioTrackLanguage.kt
             if (index >= 0) {
                 val alreadySelected = audioTracks.getOrNull(index)?.isSelected == true
                 logSwitchTrace(

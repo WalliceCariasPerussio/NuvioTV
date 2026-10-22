@@ -66,7 +66,8 @@ internal fun PlayerUiState.currentSourceStream(streams: List<Stream> = sourceAll
  * exactly or by base language (a "por" track of a PT-BR source is "pt-br"), else the tag's own code.
  */
 private fun trackLanguageVariant(track: TrackInfo, streamLanguages: List<String>): String? {
-    val code = track.language?.let(::streamLanguageCode) ?: return null
+    // A language the title names wins over the tag (PlayerAudioTrackLanguage.kt).
+    val code = audioTitleLanguage(track.name) ?: track.language?.let(::streamLanguageCode) ?: return null
     return streamLanguages.firstOrNull { it == code }
         ?: streamLanguages.firstOrNull { sameLanguage(it, code) }
         ?: code
@@ -307,7 +308,7 @@ internal fun PlayerRuntimeController.applyRequestedSourceAudioLanguage(audioTrac
     val streamLanguages = _uiState.value.currentSourceStream()?.streamTraits()?.audioLanguages.orEmpty()
     val track = audioTracks.firstOrNull { trackLanguageVariant(it, streamLanguages) == request.language }
         ?: audioTracks.firstOrNull { candidate ->
-            candidate.language?.let(::streamLanguageCode)?.let { sameLanguage(it, request.language) } == true
+            candidate.spokenLanguage()?.let { sameLanguage(it, request.language) } == true
         }
         ?: return
     val selection = PlayerRuntimeController.RememberedTrackSelection(
