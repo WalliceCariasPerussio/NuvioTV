@@ -32,6 +32,7 @@ import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.DeviceLocalPlayerPreferences
 import com.nuvio.tv.data.local.StreamLinkCacheDataStore
+import com.nuvio.tv.core.streams.StreamBadgeMatcher
 import com.nuvio.tv.data.local.StreamBadgeSettingsDataStore
 import com.nuvio.tv.data.local.BingeGroupCacheDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
@@ -443,6 +444,12 @@ class PlayerRuntimeController(
     internal var activeSidecarGeneration: Long = 0L // AutoSync hook
     internal var activeSidecarSubtitleKey: String? = null
     internal var sidecarTimedCues: List<androidx.media3.extractor.text.CuesWithTiming> = emptyList()
+        set(value) {
+            field = value
+            subtitleCueTracker.setPrescannedTexts(
+                value.flatMap { it.cues }.mapNotNull { it.text?.toString()?.takeIf(String::isNotBlank) }
+            )
+        }
     internal var lastSidecarCueSignature: Long? = null
     internal var exoSubtitleViewRef: WeakReference<androidx.media3.ui.SubtitleView>? = null
     /** Cancels previous TEXT-track bounce jobs when subtitle delay is adjusted repeatedly. */
@@ -576,6 +583,8 @@ class PlayerRuntimeController(
     internal var currentStreamBingeGroup: String? = navigationArgs.bingeGroup
     // Fork: the source playing, once picked inside the player (the next episode keeps it).
     internal var currentPlayingStream: com.nuvio.tv.domain.model.Stream? = null
+    // Per-device delay + current stream's behaviorHints.audioDelayMs + the user's tweak on that stream.
+    internal var audioDelayParts: AudioDelayParts = AudioDelayParts().withStream(navigationArgs.audioDelayMs ?: 0)
     internal var hasAppliedRememberedAudioSelection: Boolean = false
     internal var hasInitializedAudioAmplificationForSession: Boolean = false
     internal var hasInitializedCenterMixForSession: Boolean = false
@@ -605,10 +614,14 @@ class PlayerRuntimeController(
     internal var currentMediaSession: MediaSession? = null
     internal var ffmpegAudioRenderer: FfmpegAudioRenderer? = null
     internal var mpvView: NuvioMpvSurfaceView? = null
+    internal val subtitleCueTracker = SubtitleCueTracker()
     internal var mpvInitializationInProgress: Boolean = false
     internal var mpvMediaLoadPrepared: Boolean = false
     internal var mpvTrackRefreshJob: Job? = null
     internal var mpvTrackRefreshInProgress: Boolean = false
+    /** The stream whose chapters [PlayerUiState.chapters] holds. */
+    internal var mpvChaptersStreamUrl: String? = null
+    internal var exoChapterLoadJob: Job? = null
     internal val mpvTrackRefreshGate = MpvTrackRefreshGate()
     internal var pendingMpvHardRestartOnNextAttach: Boolean = false
     internal var mpvEventRelay: MpvEventRelay? = null
@@ -776,7 +789,12 @@ class PlayerRuntimeController(
                     it.copy(
                         showFileSizeBadges = settings.showFileSizeBadges,
                         showAddonLogo = settings.showAddonLogo,
-                        streamBadgePlacement = settings.badgePlacement
+                        streamBadgePlacement = settings.badgePlacement,
+                        playerBadgeFilters = if (settings.showInPlayer) {
+                            StreamBadgeMatcher.compile(settings.rules.forPlayer(settings.playerBadgeSource))
+                        } else {
+                            emptyList()
+                        }
                     )
                 }
             }

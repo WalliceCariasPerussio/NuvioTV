@@ -199,6 +199,15 @@ class StreamScreenViewModel @Inject constructor(
         )
     )
     val uiState: StateFlow<StreamScreenUiState> = _uiState.asStateFlow()
+    val watchProgress = run {
+        val id = contentId ?: videoId.substringBefore(":")
+        if (season != null && episode != null) {
+            watchProgressRepository.getEpisodeProgress(id, season, episode, playbackProfileId)
+        } else {
+            watchProgressRepository.getProgress(id, playbackProfileId)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val streamBadgeSettings = streamBadgeSettingsDataStore.settings
 
     val playerPreference = playerSettingsDataStore.playerSettings
@@ -492,7 +501,8 @@ class StreamScreenViewModel @Inject constructor(
                                 videoSize = cached.videoSize,
                                 fileIdx = cached.fileIdx,
                                 sources = cached.sources,
-                                contentLanguage = cached.contentLanguage ?: contentLanguage
+                                contentLanguage = cached.contentLanguage ?: contentLanguage,
+                                audioDelayMs = cached.audioDelayMs
                             ),
                             showDirectAutoPlayOverlay = showOverlay || it.showDirectAutoPlayOverlay,
                             isDirectAutoPlayFlow = showOverlay || it.isDirectAutoPlayFlow
@@ -1625,7 +1635,8 @@ class StreamScreenViewModel @Inject constructor(
             streamDescription = stream.description,
             fileIdx = stream.getEffectiveFileIdx(),
             sources = stream.sources,
-            contentLanguage = contentLanguage
+            contentLanguage = contentLanguage,
+            audioDelayMs = stream.behaviorHints?.audioDelayMs
         )
         StreamSidecarSubtitles.set(playbackUrlFor(playbackInfo), stream.subtitles)
         // Fork: the next episode opened from here starts on this source.
@@ -1646,7 +1657,8 @@ class StreamScreenViewModel @Inject constructor(
                     videoSize = playbackInfo.videoSize,
                     bingeGroup = playbackInfo.bingeGroup,
                     contentLanguage = contentLanguage,
-                    year = year
+                    year = year,
+                    audioDelayMs = playbackInfo.audioDelayMs
                 )
             }
         }
@@ -2164,6 +2176,7 @@ data class StreamPlaybackInfo(
     val contentLanguage: String? = null,
     // Fork: picked by hand in the list, not by autoplay (the player's source failover leaves it alone).
     val manualSourcePick: Boolean = false,
+    val audioDelayMs: Int? = null,
     val isServerStream: Boolean = false
 )
 
