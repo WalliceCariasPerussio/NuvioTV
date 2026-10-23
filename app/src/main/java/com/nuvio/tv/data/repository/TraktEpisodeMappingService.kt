@@ -6,7 +6,9 @@ import com.nuvio.tv.data.remote.api.TraktApi
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.repository.MetaRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.firstOrNull
@@ -16,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -248,7 +251,10 @@ class TraktEpisodeMappingService @Inject constructor(
             deferred.completeExceptionally(e)
             emptyList()
         } finally {
-            cacheMutex.withLock { addonEpisodesInFlight.remove(cacheKey) }
+            // Fork: NonCancellable, or a cancelled fetch could leave its entry behind for good.
+            withContext(NonCancellable) {
+                cacheMutex.withLock { addonEpisodesInFlight.remove(cacheKey) }
+            }
         }
     }
 
@@ -277,56 +283,66 @@ class TraktEpisodeMappingService @Inject constructor(
             return try { other?.await() ?: emptyList() } catch (_: Exception) { emptyList() }
         }
 
-        val seasonsResponse = traktAuthService.executeAuthorizedRequest { authHeader ->
-            traktApi.getShowSeasons(
-                authorization = authHeader,
-                id = showLookupId,
-                extended = "episodes"
-            )
-        } ?: run {
-            cleanupTraktFlight(showLookupId)
-            return emptyList()
-        }
-        if (!seasonsResponse.isSuccessful) {
-            Log.w(
-                TAG,
-                "getTraktEpisodes: seasons request failed code=${seasonsResponse.code()} id=$showLookupId"
-            )
-            cleanupTraktFlight(showLookupId)
-            return emptyList()
-        }
-
-        val traktEpisodes = seasonsResponse.body()
-            .orEmpty()
-            .asSequence()
-            .filter { (it.number ?: 0) > 0 }
-            .sortedBy { it.number }
-            .flatMap { seasonDto ->
-                seasonDto.episodes.orEmpty().asSequence()
-                    .mapNotNull { episodeDto ->
-                        val seasonNumber = episodeDto.season ?: seasonDto.number ?: return@mapNotNull null
-                        val episodeNumber = episodeDto.number ?: return@mapNotNull null
-                        EpisodeMappingEntry(
-                            season = seasonNumber,
-                            episode = episodeNumber,
-                            title = episodeDto.title
-                        )
-                    }
+        // Fork: the fetch always completes its deferred and leaves the in-flight map. Cancelled
+        // mid-request (a refresh or CW pipeline replaced by a newer one), it used to leave both
+        // behind, and every later mapping of this show awaited it forever: the Trakt refresh and
+        // Continue Watching then never finished again.
+        try {
+            val seasonsResponse = traktAuthService.executeAuthorizedRequest { authHeader ->
+                traktApi.getShowSeasons(
+                    authorization = authHeader,
+                    id = showLookupId,
+                    extended = "episodes"
+                )
+            } ?: return emptyList()
+            if (!seasonsResponse.isSuccessful) {
+                Log.w(
+                    TAG,
+                    "getTraktEpisodes: seasons request failed code=${seasonsResponse.code()} id=$showLookupId"
+                )
+                return emptyList()
             }
-            .toList()
 
-        if (traktEpisodes.isNotEmpty()) {
-            cacheMutex.withLock {
-                traktEpisodesCache[showLookupId] = traktEpisodes
+            val traktEpisodes = seasonsResponse.body()
+                .orEmpty()
+                .asSequence()
+                .filter { (it.number ?: 0) > 0 }
+                .sortedBy { it.number }
+                .flatMap { seasonDto ->
+                    seasonDto.episodes.orEmpty().asSequence()
+                        .mapNotNull { episodeDto ->
+                            val seasonNumber = episodeDto.season ?: seasonDto.number ?: return@mapNotNull null
+                            val episodeNumber = episodeDto.number ?: return@mapNotNull null
+                            EpisodeMappingEntry(
+                                season = seasonNumber,
+                                episode = episodeNumber,
+                                title = episodeDto.title
+                            )
+                        }
+                }
+                .toList()
+
+            if (traktEpisodes.isNotEmpty()) {
+                cacheMutex.withLock {
+                    traktEpisodesCache[showLookupId] = traktEpisodes
+                }
             }
+            deferred.complete(traktEpisodes)
+            return traktEpisodes
+        } catch (e: CancellationException) {
+            deferred.cancel(e)
+            throw e
+        } finally {
+            if (!deferred.isCompleted) deferred.complete(emptyList())
+            cleanupTraktFlight(showLookupId)
         }
-        deferred.complete(traktEpisodes)
-        cleanupTraktFlight(showLookupId)
-        return traktEpisodes
     }
 
     private suspend fun cleanupTraktFlight(showLookupId: String) {
-        cacheMutex.withLock { traktEpisodesInFlight.remove(showLookupId) }
+        // NonCancellable: this runs in finally blocks of fetches that may have been cancelled.
+        withContext(NonCancellable) {
+            cacheMutex.withLock { traktEpisodesInFlight.remove(showLookupId) }
+        }
     }
 
     private fun cacheKey(

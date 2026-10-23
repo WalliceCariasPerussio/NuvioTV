@@ -40,6 +40,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -1118,6 +1119,9 @@ class TraktProgressService @Inject constructor(
                 // Keep the current snapshot, and let the next poll retry instead of
                 // treating this activity change as already fetched.
                 lastKnownActivityFingerprint = null
+                // Fork: the awaits above swallow a cancellation; a refresh replaced by a newer
+                // signal rethrows it here instead of failing, so polling does not back off.
+                ensureActive()
                 throw IOException("Progress snapshot fetch failed")
             }
 
