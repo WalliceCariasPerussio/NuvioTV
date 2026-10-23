@@ -10,6 +10,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -219,7 +221,7 @@ class TraktEpisodeMappingService @Inject constructor(
         // Dedup: if another coroutine is already fetching this show, await its result.
         val existingDeferred = cacheMutex.withLock { addonEpisodesInFlight[cacheKey] }
         if (existingDeferred != null) {
-            return try { existingDeferred.await() } catch (_: Exception) { emptyList() }
+            return awaitShared(existingDeferred)
         }
 
         // Register ourselves as the in-flight fetcher.
@@ -235,8 +237,7 @@ class TraktEpisodeMappingService @Inject constructor(
             }
         }
         if (!weOwn) {
-            val other = cacheMutex.withLock { addonEpisodesInFlight[cacheKey] }
-            return try { other?.await() ?: emptyList() } catch (_: Exception) { emptyList() }
+            return awaitShared(cacheMutex.withLock { addonEpisodesInFlight[cacheKey] })
         }
 
         return try {
@@ -247,6 +248,9 @@ class TraktEpisodeMappingService @Inject constructor(
             }
             deferred.complete(addonEpisodes)
             addonEpisodes
+        } catch (e: CancellationException) {
+            deferred.cancel(e)
+            throw e
         } catch (e: Exception) {
             deferred.completeExceptionally(e)
             emptyList()
@@ -265,7 +269,7 @@ class TraktEpisodeMappingService @Inject constructor(
 
         val existingDeferred = cacheMutex.withLock { traktEpisodesInFlight[showLookupId] }
         if (existingDeferred != null) {
-            return try { existingDeferred.await() } catch (_: Exception) { emptyList() }
+            return awaitShared(existingDeferred)
         }
 
         val deferred = CompletableDeferred<List<EpisodeMappingEntry>>()
@@ -279,8 +283,7 @@ class TraktEpisodeMappingService @Inject constructor(
             }
         }
         if (!weOwn) {
-            val other = cacheMutex.withLock { traktEpisodesInFlight[showLookupId] }
-            return try { other?.await() ?: emptyList() } catch (_: Exception) { emptyList() }
+            return awaitShared(cacheMutex.withLock { traktEpisodesInFlight[showLookupId] })
         }
 
         // Fork: the fetch always completes its deferred and leaves the in-flight map. Cancelled
@@ -336,6 +339,19 @@ class TraktEpisodeMappingService @Inject constructor(
             if (!deferred.isCompleted) deferred.complete(emptyList())
             cleanupTraktFlight(showLookupId)
         }
+    }
+
+    /**
+     * Fork: a caller waiting on another one's fetch gets an empty list when that fetch failed or its
+     * owner was cancelled, but its own cancellation still propagates.
+     */
+    private suspend fun awaitShared(
+        deferred: CompletableDeferred<List<EpisodeMappingEntry>>?
+    ): List<EpisodeMappingEntry> = try {
+        deferred?.await() ?: emptyList()
+    } catch (_: Exception) {
+        currentCoroutineContext().ensureActive()
+        emptyList()
     }
 
     private suspend fun cleanupTraktFlight(showLookupId: String) {
