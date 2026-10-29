@@ -2,6 +2,7 @@ package com.nuvio.tv.updater
 
 import com.nuvio.tv.data.remote.dto.GitHubReleaseDto
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReleaseSelectorTest {
@@ -58,6 +59,29 @@ class ReleaseSelectorTest {
         val selected = ReleaseSelector.eligibleReleases(releases, UpdateChannel.BETA)
 
         assertEquals(listOf("1.1.0"), selected.map { it.tagName })
+    }
+
+    @Test
+    fun `stable channel accepts fork builds whatever upstream suffix they carry`() {
+        val releases = listOf(
+            release("v1.1.0-fork.6290.beta.8", name = "Nuvio TV 1.1.0-fork.6290.beta.8"),
+            release("v1.1.0-fork.6300.rc.1", prerelease = true),
+            release("v1.1.0-fork.6291.beta.8"),
+            release("1.0.1")
+        )
+
+        val selected = ReleaseSelector.eligibleReleases(releases, UpdateChannel.STABLE)
+
+        assertEquals(
+            listOf("v1.1.0-fork.6291.beta.8", "v1.1.0-fork.6290.beta.8", "1.0.1"),
+            selected.map { it.tagName }
+        )
+    }
+
+    @Test
+    fun `fork builds order by commit count before the upstream suffix`() {
+        assertTrue(VersionUtils.isRemoteNewer("1.1.0-fork.6291", "1.1.0-fork.6290.rc.1"))
+        assertTrue(VersionUtils.isRemoteNewer("1.1.0-fork.6291.beta.9", "1.1.0-fork.6290.beta.8"))
     }
 
     private fun release(

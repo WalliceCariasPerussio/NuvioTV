@@ -1,0 +1,149 @@
+name: Fork Android TV Release
+
+# Fork only: on every push to dev, builds the full release APKs with the id and key of the test build
+# already on the devices (com.nuviodebug.com, signed with the dev PC's debug keystore) and publishes them
+# as the latest release of this fork, which the in-app updater checks (GITHUB_OWNER in app/build.gradle.kts).
+# versionCode is the commit count and versionName x.y.z-fork.<count>[.<upstream suffix>] (same file), so
+# the release always replaces an older build, including one installed locally with adb.
+
+on:
+  push:
+    branches:
+      - dev
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-android-tv-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish full release APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+      FORK_APPLICATION_ID: com.nuviodebug.com
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v6
+        with:
+          # The version comes from the commit count.
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Configure release properties
+        run: |
+          missing=()
+          for secret_name in LOCAL_PROPERTIES_BASE64 RELEASE_KEYSTORE_BASE64; do
+            [[ -n "${!secret_name}" ]] || missing+=("${secret_name}")
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+          keystore_path="${RUNNER_TEMP}/nuvio-fork.keystore"
+          printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          printf '%s' "${LOCAL_PROPERTIES_BASE64}" | base64 --decode > local.properties
+          sed -i -E '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_STORE_FILE)[[:space:]]*=/d' local.properties
+          printf '\nNUVIO_RELEASE_STORE_FILE=%s\n' "${keystore_path}" >> local.properties
+
+          required_properties=(
+            NUVIO_RELEASE_STORE_PASSWORD
+            NUVIO_RELEASE_KEY_ALIAS
+            NUVIO_RELEASE_KEY_PASSWORD
+            NUVIO_SUPABASE_URL
+            NUVIO_SUPABASE_ANON_KEY
+            TRAKT_CLIENT_ID
+            TRAKT_CLIENT_SECRET
+          )
+          for property_name in "${required_properties[@]}"; do
+            if ! grep -Eq "^[[:space:]]*${property_name}[[:space:]]*=[[:space:]]*.+$" local.properties; then
+              echo "Missing required property: ${property_name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Test updater and build full release APKs
+        run: |
+          ./gradlew \
+            :app:testFullReleaseUnitTest --tests 'com.nuvio.tv.updater.*' \
+            :app:assembleFullRelease \
+            "-Pnuvio.fork.applicationId=${FORK_APPLICATION_ID}" \
+            --stacktrace
+
+      - name: Read built version
+        id: version
+        run: |
+          metadata=app/build/outputs/apk/full/release/output-metadata.json
+          application_id="$(jq -r '.applicationId' "${metadata}")"
+          version_name="$(jq -r '.elements[0].versionName' "${metadata}")"
+          version_code="$(jq -r '.elements[0].versionCode' "${metadata}")"
+          if [[ "${application_id}" != "${FORK_APPLICATION_ID}" ]]; then
+            echo "Built ${application_id}, expected ${FORK_APPLICATION_ID}." >&2
+            exit 1
+          fi
+          if [[ "${version_name}" != *-fork.* ]]; then
+            echo "versionName ${version_name} is missing the fork suffix." >&2
+            exit 1
+          fi
+          echo "Built ${application_id} ${version_name} (${version_code})"
+          echo "name=${version_name}" >> "${GITHUB_OUTPUT}"
+          echo "code=${version_code}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish release
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          tag="v${VERSION_NAME}"
+          mapfile -t release_apks < <(find app/build/outputs/apk/full/release -maxdepth 1 -type f -name '*.apk' -print | sort)
+          if (( ${#release_apks[@]} == 0 )); then
+            echo "No release APKs were produced." >&2
+            exit 1
+          fi
+
+          {
+            echo "Fork build ${VERSION_NAME} (versionCode ${VERSION_CODE}) of ${GITHUB_SHA::8}"
+            echo
+            git log -1 --format='%s'
+          } > "${RUNNER_TEMP}/release-notes.md"
+
+          # A re-run of the same commit produces the same version.
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release delete "${tag}" --repo "${GITHUB_REPOSITORY}" --cleanup-tag --yes
+          fi
+          gh release create "${tag}" "${release_apks[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "Nuvio TV ${VERSION_NAME}" \
+            --notes-file "${RUNNER_TEMP}/release-notes.md" \
+            --latest
+
+      - name: Delete old fork releases
+        run: |
+          gh release list --repo "${GITHUB_REPOSITORY}" --limit 1000 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+-fork\\."))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
+            | while read -r old_tag; do
+                gh release delete "${old_tag}" --repo "${GITHUB_REPOSITORY}" --cleanup-tag --yes
+              done

@@ -33,9 +33,14 @@ internal object ReleaseSelector {
     private fun isPrerelease(
         release: GitHubReleaseDto,
         version: SemanticVersion
-    ): Boolean = release.prerelease ||
-        version.prerelease.isNotEmpty() ||
-        prereleaseNamePattern.containsMatchIn(release.name.orEmpty())
+    ): Boolean {
+        // Fork builds (x.y.z-fork.<commit count>[.<upstream suffix>]) are this fork's stable
+        // releases, whatever upstream suffix they carry.
+        if (!release.prerelease && version.prerelease.firstOrNull() == "fork") return false
+        return release.prerelease ||
+            version.prerelease.isNotEmpty() ||
+            prereleaseNamePattern.containsMatchIn(release.name.orEmpty())
+    }
 
     private data class ReleaseCandidate(
         val release: GitHubReleaseDto,
