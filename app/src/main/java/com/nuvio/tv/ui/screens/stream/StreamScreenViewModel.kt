@@ -242,6 +242,12 @@ class StreamScreenViewModel @Inject constructor(
         if (streamBadgePresentationJob?.isActive == true) return
 
         streamBadgePresentationJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            // Nothing can match without active filters, so skip rebuilding the
+            // stream lists for every chunk.
+            if (!streamBadgePresentation.hasActiveFilters()) {
+                badgedAddonNames = badgedAddonNames + newGroups.map { it.addonName }.toSet()
+                return@launch
+            }
             var pending = newGroups
             while (pending.isNotEmpty()) {
                 val allNewStreams = pending.flatMap { it.streams }
@@ -502,7 +508,8 @@ class StreamScreenViewModel @Inject constructor(
                                 fileIdx = cached.fileIdx,
                                 sources = cached.sources,
                                 contentLanguage = cached.contentLanguage ?: contentLanguage,
-                                audioDelayMs = cached.audioDelayMs
+                                audioDelayMs = cached.audioDelayMs,
+                                audioDelayLanguage = cached.audioDelayLanguage
                             ),
                             showDirectAutoPlayOverlay = showOverlay || it.showDirectAutoPlayOverlay,
                             isDirectAutoPlayFlow = showOverlay || it.isDirectAutoPlayFlow
@@ -764,7 +771,9 @@ class StreamScreenViewModel @Inject constructor(
                     return
                 }
                 debridPreparationLaunched = true
-                viewModelScope.launch {
+                // Off the main thread: each prepared link rewrites the whole stream list,
+                // and the badge job can make that update retry many times.
+                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
                     directDebridStreamPreparer.prepare(
                         streams = _uiState.value.allStreams,
                         season = season,
@@ -1636,7 +1645,8 @@ class StreamScreenViewModel @Inject constructor(
             fileIdx = stream.getEffectiveFileIdx(),
             sources = stream.sources,
             contentLanguage = contentLanguage,
-            audioDelayMs = stream.behaviorHints?.audioDelayMs
+            audioDelayMs = stream.behaviorHints?.audioDelayMs,
+            audioDelayLanguage = stream.behaviorHints?.audioDelayLanguage
         )
         StreamSidecarSubtitles.set(playbackUrlFor(playbackInfo), stream.subtitles)
         // Fork: the next episode opened from here starts on this source.
@@ -1658,7 +1668,8 @@ class StreamScreenViewModel @Inject constructor(
                     bingeGroup = playbackInfo.bingeGroup,
                     contentLanguage = contentLanguage,
                     year = year,
-                    audioDelayMs = playbackInfo.audioDelayMs
+                    audioDelayMs = playbackInfo.audioDelayMs,
+                    audioDelayLanguage = playbackInfo.audioDelayLanguage
                 )
             }
         }
@@ -1686,7 +1697,7 @@ class StreamScreenViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        if (isTorrentStreamStarted) {
+        if (isTorrentStreamStarted && !externalPlaybackTracker.isOwningTorrentStream) {
             torrentService.stopStream()
             isTorrentStreamStarted = false
         }
@@ -1809,6 +1820,7 @@ class StreamScreenViewModel @Inject constructor(
 
             var call: okhttp3.Call? = null
             var fetchJob: kotlinx.coroutines.Job? = null
+            var keepStreamForPlayer = false
             try {
                 val trackers = playbackInfo.sources
                     ?.filter { it.startsWith("tracker:") }
@@ -1860,6 +1872,7 @@ class StreamScreenViewModel @Inject constructor(
                 if (!preloaded) {
                     throw Exception(context.getString(R.string.torrent_error_start_timeout, 60))
                 }
+                keepStreamForPlayer = true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start torrent stream for external player", e)
                 updateUiStateIfChanged {
@@ -1881,7 +1894,7 @@ class StreamScreenViewModel @Inject constructor(
                 call?.cancel()
                 fetchJob?.cancel()
                 statsJob.cancel()
-                if (!externalPlayerLaunched && isTorrentStreamStarted) {
+                if (!keepStreamForPlayer && isTorrentStreamStarted) {
                     torrentService.stopStream()
                     isTorrentStreamStarted = false
                 }
@@ -1909,55 +1922,67 @@ class StreamScreenViewModel @Inject constructor(
             profileId = playbackInfo.profileId
         )
 
-        val settings = playerSettingsDataStore.playerSettings.first()
-        val subtitleInputs = if (settings.externalPlayerForwardSubtitles) {
-            fetchSubtitlesForExternalPlayer(metadata, playbackInfo, settings)
-        } else {
-            null
-        }
-        if (settings.externalPlayerSendSkipSegments) {
-            updateUiStateIfChanged {
-                it.copy(
-                    directAutoPlayMessage = if (settings.showPlayerLoadingStatus) {
-                        context.getString(R.string.external_player_loading_skip_segments)
-                    } else {
-                        null
-                    },
-                    directAutoPlayProgress = null
-                )
+        var launched = false
+        try {
+            val settings = playerSettingsDataStore.playerSettings.first()
+            val subtitleInputs = if (settings.externalPlayerForwardSubtitles) {
+                fetchSubtitlesForExternalPlayer(metadata, playbackInfo, settings)
+            } else {
+                null
             }
-        }
-
-        // Set timestamp right before actual launch so the 500ms guard
-        // protects against spurious ON_RESUME after the player intent is sent.
-        externalPlayerLaunchTimeMs = System.currentTimeMillis()
-
-        val launched = externalPlaybackTracker.launchPlayer(
-            metadata = metadata,
-            url = playUrl,
-            title = metadata.buildPlayerTitle(),
-            headers = playbackInfo.headers,
-            resumePositionMs = resumePositionMs,
-            startFromBeginning = startFromBeginning,
-            subtitles = subtitleInputs,
-            autoLaunch = autoLaunch,
-            nextEpisodeSnapshot = playbackMetaVideos?.let { videos ->
-                externalPlaybackTracker.resolveNextEpisodeSnapshot(metadata, videos)
-            },
-            context = context
-        )
-        if (!launched) {
-            streamRepository.setLocalPluginSearchPaused(false)
-            externalPlayerLaunched = false
-            externalPlayerLaunchTimeMs = 0L
-            updateUiStateIfChanged {
-                it.copy(
-                    showDirectAutoPlayOverlay = false,
-                    externalPlayerOverlayVisible = false,
-                    directAutoPlayMessage = null,
-                    directAutoPlayProgress = null
-                )
+            if (settings.externalPlayerSendSkipSegments) {
+                updateUiStateIfChanged {
+                    it.copy(
+                        directAutoPlayMessage = if (settings.showPlayerLoadingStatus) {
+                            context.getString(R.string.external_player_loading_skip_segments)
+                        } else {
+                            null
+                        },
+                        directAutoPlayProgress = null
+                    )
+                }
             }
+
+            // Set timestamp right before actual launch so the 500ms guard
+            // protects against spurious ON_RESUME after the player intent is sent.
+            externalPlayerLaunchTimeMs = System.currentTimeMillis()
+
+            launched = externalPlaybackTracker.launchPlayer(
+                metadata = metadata,
+                url = playUrl,
+                title = metadata.buildPlayerTitle(),
+                headers = playbackInfo.headers,
+                resumePositionMs = resumePositionMs,
+                startFromBeginning = startFromBeginning,
+                subtitles = subtitleInputs,
+                autoLaunch = autoLaunch,
+                nextEpisodeSnapshot = playbackMetaVideos?.let { videos ->
+                    externalPlaybackTracker.resolveNextEpisodeSnapshot(metadata, videos)
+                },
+                ownsTorrentStream = isTorrentStreamStarted,
+                context = context
+            )
+        } finally {
+            if (!launched) abortExternalHandoff()
+        }
+    }
+
+    private fun abortExternalHandoff() {
+        if (externalPlaybackTracker.isOwningTorrentStream) return
+        streamRepository.setLocalPluginSearchPaused(false)
+        externalPlayerLaunched = false
+        externalPlayerLaunchTimeMs = 0L
+        if (isTorrentStreamStarted) {
+            torrentService.stopStream()
+            isTorrentStreamStarted = false
+        }
+        updateUiStateIfChanged {
+            it.copy(
+                showDirectAutoPlayOverlay = false,
+                externalPlayerOverlayVisible = false,
+                directAutoPlayMessage = null,
+                directAutoPlayProgress = null
+            )
         }
     }
 
@@ -2042,6 +2067,8 @@ class StreamScreenViewModel @Inject constructor(
                 // Download subtitle files to local cache and convert to content:// URIs
                 subtitleFileCache.cacheSubtitles(inputs)
             }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch subtitles for external player", e)
             null
@@ -2177,6 +2204,7 @@ data class StreamPlaybackInfo(
     // Fork: picked by hand in the list, not by autoplay (the player's source failover leaves it alone).
     val manualSourcePick: Boolean = false,
     val audioDelayMs: Int? = null,
+    val audioDelayLanguage: String? = null,
     val isServerStream: Boolean = false
 )
 

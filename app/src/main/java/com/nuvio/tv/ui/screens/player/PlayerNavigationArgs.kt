@@ -39,7 +39,8 @@ internal data class PlayerNavigationArgs(
     val profileId: Int?,
     // Fork: the stream was picked by hand on the stream screen (the source failover leaves it alone).
     val manualSourcePick: Boolean = false,
-    val audioDelayMs: Int? = null
+    val audioDelayMs: Int? = null,
+    val audioDelayLanguage: String? = null
 ) {
     val torrentTrackers: List<String>
         get() {
@@ -101,7 +102,8 @@ internal data class PlayerNavigationArgs(
                 launchStartedAtMs = savedStateHandle.get<String>("launchStartedAtMs")?.toLongOrNull(),
                 profileId = savedStateHandle.get<String>("profileId")?.toIntOrNull(),
                 manualSourcePick = savedStateHandle.get<String>("manualSourcePick")?.toBooleanStrictOrNull() == true,
-                audioDelayMs = savedStateHandle.get<String>("audioDelayMs")?.toIntOrNull()
+                audioDelayMs = savedStateHandle.get<String>("audioDelayMs")?.toIntOrNull(),
+                audioDelayLanguage = decodedOrNull("audioDelayLanguage")
             )
         }
     }

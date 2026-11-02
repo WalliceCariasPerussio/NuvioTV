@@ -1104,15 +1104,17 @@ class TraktProgressService @Inject constructor(
 
             val snapshot = try {
                 progressDeferred.await()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "fetchAllProgressSnapshot failed, keeping existing snapshot", e)
                 null
             }
             watchedMoviesDeferred?.let {
-                try { it.await() } catch (_: Exception) { }
+                try { it.await() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
             }
             seedsDeferred?.let {
-                try { it.await() } catch (_: Exception) { }
+                try { it.await() } catch (e: CancellationException) { throw e } catch (_: Exception) { }
             }
 
             if (snapshot == null) {

@@ -5,6 +5,11 @@
 
 package com.nuvio.tv.ui.screens.player
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -100,6 +105,7 @@ internal fun EpisodesSidePanel(
     onSeasonSelected: (Int) -> Unit,
     onAddonFilterSelected: (String?) -> Unit,
     onEpisodeSelected: (Video) -> Unit,
+    onEpisodeManualPlay: (Video) -> Unit,
     onStreamSelected: (Stream) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -162,7 +168,8 @@ internal fun EpisodesSidePanel(
                         uiState = uiState,
                         episodesFocusRequester = episodesFocusRequester,
                         onSeasonSelected = onSeasonSelected,
-                        onEpisodeSelected = onEpisodeSelected
+                        onEpisodeSelected = onEpisodeSelected,
+                        onEpisodeManualPlay = onEpisodeManualPlay
                     )
                 }
             }
@@ -538,7 +545,8 @@ private fun EpisodesListView(
     uiState: PlayerUiState,
     episodesFocusRequester: FocusRequester,
     onSeasonSelected: (Int) -> Unit,
-    onEpisodeSelected: (Video) -> Unit
+    onEpisodeSelected: (Video) -> Unit,
+    onEpisodeManualPlay: (Video) -> Unit
 ) {
     val seasonTabFocusRequester = remember { FocusRequester() }
     val episodesListState = rememberLazyListState()
@@ -680,6 +688,8 @@ private fun EpisodesListView(
             showWatchedActions = false,
             isCurrentlyPlaying = episode.season == uiState.currentSeason &&
                 episode.episode == uiState.currentEpisode,
+            showPlayManually = episode.season != uiState.currentSeason ||
+                episode.episode != uiState.currentEpisode,
             onDismiss = { detailsEpisode = null },
             onNavigateEpisode = { step ->
                 adjacentEpisode(uiState.episodes, episode, step)?.let { detailsEpisode = it }
@@ -687,6 +697,10 @@ private fun EpisodesListView(
             onPlay = {
                 detailsEpisode = null
                 onEpisodeSelected(episode)
+            },
+            onPlayManually = {
+                detailsEpisode = null
+                onEpisodeManualPlay(episode)
             },
             onToggleWatched = {}
         )
@@ -746,9 +760,17 @@ private fun EpisodesSeasonTabs(
                 onClick = { onSeasonSelected(season) },
                 modifier = Modifier
                     .then(if (index == focusEntryIndex) Modifier.focusRequester(selectedTabFocusRequester) else Modifier)
+                    .semantics {
+                        role = Role.Tab
+                        this.selected = isSelected
+                    }
                     .onFocusChanged {
                         isFocused = it.isFocused
                         if (it.isFocused && season != selectedSeason) pendingSeason = season
+                    }
+                    .semantics {
+                        role = Role.Tab
+                        this.selected = isSelected
                     },
                 shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.spacing.xl)),
                 colors = CardDefaults.colors(
