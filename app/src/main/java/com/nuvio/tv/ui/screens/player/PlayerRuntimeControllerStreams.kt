@@ -1261,6 +1261,7 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(
                     streams = state.episodeAllStreams
                 )
                 if (selectedStream != null) {
+                    forgetManualSourcePick() // fork: this source was picked automatically
                     switchToEpisodeStream(
                         stream = selectedStream,
                         forcedTargetVideo = video,
@@ -1374,6 +1375,7 @@ internal fun PlayerRuntimeController.loadStreamsForEpisode(
                 streams = _uiState.value.episodeAllStreams
             )
             if (selectedStream != null) {
+                forgetManualSourcePick() // fork: this source was picked automatically
                 switchToEpisodeStream(
                     stream = selectedStream,
                     forcedTargetVideo = video,
