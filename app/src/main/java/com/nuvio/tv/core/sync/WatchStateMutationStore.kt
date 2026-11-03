@@ -13,15 +13,32 @@ import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// @Keep: gravados em JSON com Gson pelo nome do campo. Sem ele o R8 renomeia os campos na release e as
+// pendências gravadas por um build de debug (ou por outra versão) voltam com tudo nulo.
+@androidx.annotation.Keep
 private data class PendingProgressUpsert(
     val key: String,
     val progress: WatchProgress
 )
 
+@androidx.annotation.Keep
 private data class PendingWatchedUpsert(
     val key: WatchedMutationKey,
     val item: WatchedItem
 )
+
+// O Gson ignora a nulidade do Kotlin: JSON gravado com outros nomes de campo vem com campos nulos.
+private fun PendingProgressUpsert.isComplete(): Boolean {
+    val storedKey: String? = this.key
+    val storedProgress: WatchProgress? = this.progress
+    return storedKey != null && storedProgress != null
+}
+
+private fun PendingWatchedUpsert.isComplete(): Boolean {
+    val storedKey: WatchedMutationKey? = this.key
+    val storedItem: WatchedItem? = this.item
+    return storedKey != null && storedItem != null
+}
 
 @Singleton
 class WatchStateMutationStore @Inject constructor(
@@ -185,12 +202,14 @@ class WatchStateMutationStore @Inject constructor(
     private fun parseProgressUpserts(raw: Set<String>?): Map<String, WatchProgress> {
         return raw.orEmpty().mapNotNull { json ->
             runCatching { gson.fromJson(json, PendingProgressUpsert::class.java) }.getOrNull()
+                ?.takeIf { it.isComplete() }
         }.associate { it.key to it.progress }
     }
 
     private fun parseWatchedUpserts(raw: Set<String>?): Map<WatchedMutationKey, WatchedItem> {
         return raw.orEmpty().mapNotNull { json ->
             runCatching { gson.fromJson(json, PendingWatchedUpsert::class.java) }.getOrNull()
+                ?.takeIf { it.isComplete() }
         }.associate { it.key to it.item }
     }
 

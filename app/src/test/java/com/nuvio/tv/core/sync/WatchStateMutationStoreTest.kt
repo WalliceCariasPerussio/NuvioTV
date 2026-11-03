@@ -1,5 +1,7 @@
 package com.nuvio.tv.core.sync
 
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.domain.model.WatchProgress
@@ -104,6 +106,29 @@ class WatchStateMutationStoreTest {
         recreated.acknowledgeWatchedUpserts(listOf(watched), 1)
         assertFalse(recreated.hasPendingProgressMutations(1))
         assertFalse(recreated.hasPendingWatchedMutations(1))
+    }
+
+    @Test
+    fun `pending entries written with other field names are dropped instead of crashing`() = runTest {
+        val harness = harness()
+        val valid = progress("valid", 100L)
+        harness.store.queueProgressUpserts(mapOf("valid" to valid), 1)
+        harness.store.queueWatchedUpserts(listOf(watched("show", watchedAt = 100L)), 1)
+        // Como um build com os campos renomeados pelo R8 grava: o Gson não acha "key"/"progress" e deixa nulos.
+        val progressKey = stringSetPreferencesKey("progress_upserts")
+        val watchedKey = stringSetPreferencesKey("watched_upserts")
+        harness.factory.get(1, "watch_state_pending_mutations").edit { prefs ->
+            prefs[progressKey] = prefs[progressKey].orEmpty() + """{"a":"stale","b":{"contentId":"stale"}}"""
+            prefs[watchedKey] = prefs[watchedKey].orEmpty() + """{"a":{"contentId":"stale"},"b":{}}"""
+        }
+
+        assertEquals(mapOf("valid" to valid), harness.store.pendingProgressUpserts(1))
+        assertEquals(1, harness.store.pendingWatchedUpserts(1).size)
+
+        // Regravar a lista não pode passar os campos nulos para o construtor.
+        val other = progress("other", 200L)
+        harness.store.queueProgressUpserts(mapOf("other" to other), 1)
+        assertEquals(mapOf("valid" to valid, "other" to other), harness.store.pendingProgressUpserts(1))
     }
 
     private fun harness(): Harness {

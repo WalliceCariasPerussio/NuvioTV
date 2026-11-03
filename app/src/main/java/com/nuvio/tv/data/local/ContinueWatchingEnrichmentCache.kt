@@ -14,6 +14,9 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// @Keep: gravados em JSON com Gson pelo nome do campo. Sem ele o R8 renomeia os campos na release e o arquivo
+// gravado por um build de debug (ou por outra versão) deixa de ser lido.
+@androidx.annotation.Keep
 data class CachedNextUpItem(
     val contentId: String,
     val contentType: String,
@@ -44,6 +47,7 @@ data class CachedNextUpItem(
     val ratingVisible: Boolean = true
 )
 
+@androidx.annotation.Keep
 data class CachedInProgressItem(
     val contentId: String,
     val contentType: String,
@@ -107,8 +111,9 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
             try {
                 val file = nextUpFile()
                 if (!file.exists()) return@withContext emptyList()
-                gson.fromJson(file.readText(), object : TypeToken<List<CachedNextUpItem>>() {}.type)
-                    ?: emptyList()
+                val parsed: List<CachedNextUpItem?>? =
+                    gson.fromJson(file.readText(), object : TypeToken<List<CachedNextUpItem>>() {}.type)
+                parsed.orEmpty().mapNotNull { it?.validOrNull() }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read next-up cache: ${e.message}")
                 emptyList()
@@ -153,8 +158,9 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
             try {
                 val file = inProgressFile()
                 if (!file.exists()) return@withContext emptyList()
-                gson.fromJson(file.readText(), object : TypeToken<List<CachedInProgressItem>>() {}.type)
-                    ?: emptyList()
+                val parsed: List<CachedInProgressItem?>? =
+                    gson.fromJson(file.readText(), object : TypeToken<List<CachedInProgressItem>>() {}.type)
+                parsed.orEmpty().mapNotNull { it?.validOrNull() }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read in-progress cache: ${e.message}")
                 emptyList()
@@ -213,4 +219,30 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
         }
     }
 
+}
+
+// O Gson preenche os campos por reflexão e ignora a nulidade do Kotlin: um arquivo gravado por outro build
+// (debug sem R8 x release com campos renomeados, ou versão com campos diferentes) chega com campos obrigatórios
+// nulos, e o NPE ("parameter contentId") estourava depois, na Home, ao escolher o perfil. Item incompleto é
+// descartado; o pipeline do Continuar Assistindo refaz a lista. Os campos são lidos em variáveis anuláveis para
+// a checagem valer em tempo de execução, e só depois o copy (o construtor confere cada parâmetro não nulo).
+
+private fun CachedNextUpItem.validOrNull(): CachedNextUpItem? {
+    val id: String? = contentId
+    val type: String? = contentType
+    val title: String? = name
+    val video: String? = videoId
+    if (id.isNullOrBlank() || type == null || title == null || video == null) return null
+    val genreList: List<String>? = genres
+    return if (genreList == null) copy(genres = emptyList()) else this
+}
+
+private fun CachedInProgressItem.validOrNull(): CachedInProgressItem? {
+    val id: String? = contentId
+    val type: String? = contentType
+    val title: String? = name
+    val video: String? = videoId
+    if (id.isNullOrBlank() || type == null || title == null || video == null) return null
+    val genreList: List<String>? = genres
+    return if (genreList == null) copy(genres = emptyList()) else this
 }
