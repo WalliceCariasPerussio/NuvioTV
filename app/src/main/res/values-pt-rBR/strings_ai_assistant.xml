@@ -9,7 +9,7 @@
     <string name="ai_assistant_voice_failed">Não deu para ouvir o pedido. Tente de novo.</string>
     <string name="ai_assistant_voice_permission">Libere o microfone para falar com o assistente.</string>
     <string name="ai_assistant_setup_title">Assistente com IA</string>
-    <string name="ai_assistant_setup_message">Escolha o provedor e cole a sua chave de API. Ela fica só nesta TV e vale para todos os perfis. Dica: o controle remoto do Google TV no app Google Home deixa colar a chave pelo celular.</string>
+    <string name="ai_assistant_setup_message">Escolha o provedor e cole a sua chave de API. Ela fica só nesta TV e vale para todos os perfis. Para não digitar com o controle, use “Colar a chave pelo celular”.</string>
     <string name="ai_assistant_free">grátis</string>
     <string name="ai_assistant_key_label">Chave de API</string>
     <string name="ai_assistant_key_hint">Pegue a chave em %1$s</string>
@@ -32,4 +32,18 @@
     <string name="ai_assistant_suggestion_2">Um filme leve para hoje</string>
     <string name="ai_assistant_suggestion_3">Séries curtas de suspense</string>
     <string name="ai_assistant_suggestion_4">Algo parecido com o que vi por último</string>
+    <string name="ai_assistant_phone_setup">Colar a chave pelo celular</string>
+    <string name="ai_assistant_phone_instruction">Aponte a câmera do celular para o QR code, cole a chave na página e toque em Salvar. O celular precisa estar no mesmo Wi-Fi.</string>
+    <string name="ai_assistant_key_received">Chave recebida. Agora escolha o modelo.</string>
+    <string name="web_ai_title">Assistente com IA</string>
+    <string name="web_ai_subtitle">Escolha o provedor, cole a chave de API e toque em Salvar. Ela vai direto para a TV.</string>
+    <string name="web_ai_provider">Provedor</string>
+    <string name="web_ai_key">Chave de API</string>
+    <string name="web_ai_key_placeholder">Cole a chave aqui</string>
+    <string name="web_ai_get_key">Pegue a chave em</string>
+    <string name="web_ai_save">Salvar</string>
+    <string name="web_ai_saved">Chave enviada para a TV. Escolha o modelo na TV.</string>
+    <string name="web_ai_error_empty">Cole a chave.</string>
+    <string name="web_ai_error">Não deu para enviar. A TV ainda está mostrando o QR code?</string>
+    <string name="web_ai_has_key">esta TV já tem uma chave deste provedor; salvar troca a atual.</string>
 </resources>

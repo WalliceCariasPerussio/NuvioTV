@@ -97,6 +97,8 @@ class AiAssistantSettingsStore @Inject constructor(
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<AiAssistantSettings> = _settings.asStateFlow()
 
+    // Pode ser chamado da página do celular (thread do servidor) e da tela ao mesmo tempo.
+    @Synchronized
     fun save(provider: AiProvider, apiKey: String, model: String) {
         val current = _settings.value
         val updated = current.copy(

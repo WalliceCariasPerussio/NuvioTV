@@ -9,7 +9,7 @@
     <string name="ai_assistant_voice_failed">Couldn\'t hear the request. Try again.</string>
     <string name="ai_assistant_voice_permission">Allow the microphone to speak to the assistant.</string>
     <string name="ai_assistant_setup_title">AI assistant</string>
-    <string name="ai_assistant_setup_message">Choose a provider and paste your API key. It stays on this TV and is used by every profile. Tip: the Google TV remote in the Google Home app lets you paste it from the phone.</string>
+    <string name="ai_assistant_setup_message">Choose a provider and paste your API key. It stays on this TV and is used by every profile. To avoid typing it with the remote, use “Paste the key from the phone”.</string>
     <string name="ai_assistant_free">free</string>
     <string name="ai_assistant_key_label">API key</string>
     <string name="ai_assistant_key_hint">Get a key at %1$s</string>
@@ -32,4 +32,18 @@
     <string name="ai_assistant_suggestion_2">A light movie for tonight</string>
     <string name="ai_assistant_suggestion_3">Short thriller series</string>
     <string name="ai_assistant_suggestion_4">Something like what I watched last</string>
+    <string name="ai_assistant_phone_setup">Paste the key from the phone</string>
+    <string name="ai_assistant_phone_instruction">Point the phone camera at the QR code, paste the key on the page and tap Save. The phone must be on the same Wi-Fi.</string>
+    <string name="ai_assistant_key_received">Key received. Now pick the model.</string>
+    <string name="web_ai_title">AI assistant</string>
+    <string name="web_ai_subtitle">Choose the provider, paste the API key and tap Save. It goes straight to the TV.</string>
+    <string name="web_ai_provider">Provider</string>
+    <string name="web_ai_key">API key</string>
+    <string name="web_ai_key_placeholder">Paste the key here</string>
+    <string name="web_ai_get_key">Get a key at</string>
+    <string name="web_ai_save">Save</string>
+    <string name="web_ai_saved">Key sent to the TV. Pick the model on the TV.</string>
+    <string name="web_ai_error_empty">Paste the key.</string>
+    <string name="web_ai_error">Could not send. Is the TV still showing the QR code?</string>
+    <string name="web_ai_has_key">this TV already has a key for this provider; saving replaces it.</string>
 </resources>

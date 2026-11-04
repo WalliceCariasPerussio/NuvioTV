@@ -71,6 +71,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -88,6 +91,7 @@ import com.nuvio.tv.core.ai.AiProvider
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.ui.components.CatalogRowSection
+import com.nuvio.tv.ui.screens.addon.QrCodeOverlay
 import com.nuvio.tv.ui.screens.collection.NuvioButton
 import com.nuvio.tv.ui.screens.home.HeroBackdropState
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -119,6 +123,11 @@ fun AiAssistantScreen(
     var restoreTurnId by rememberSaveable { mutableStateOf<Long?>(null) }
     var restoreItemIndex by rememberSaveable { mutableStateOf(-1) }
     var scrolledForTurnId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val phoneSetup by viewModel.phoneSetup.collectAsState()
+    // Muda quando a chave chega pelo celular: recria o cartão com a chave e o provedor novos.
+    var setupGeneration by rememberSaveable { mutableStateOf(0) }
+    val context = LocalContext.current
+    val keyReceivedMessage = stringResource(R.string.ai_assistant_key_received)
 
     // O botão apertado pode sair da tela (Nova conversa, Tentar de novo, Alterar, Salvar): o foco vai
     // para um alvo que continua nela, senão o D-pad fica sem resposta.
@@ -142,6 +151,30 @@ fun AiAssistantScreen(
         if (restoreTurnId != null) return@LaunchedEffect // a linha do cartaz restaura o foco
         requestFocusAfterLayout(if (settings.isConfigured) micFocusRequester else setupFocusRequester)
     }
+    LaunchedEffect(phoneSetup.received) {
+        if (!phoneSetup.received) return@LaunchedEffect
+        setupGeneration++
+        editing = true // o cartão fica aberto para escolher o modelo com a chave nova
+        Toast.makeText(context, keyReceivedMessage, Toast.LENGTH_SHORT).show()
+        // Deixa a resposta chegar ao celular antes de tirar o servidor do ar.
+        delay(1_000)
+        viewModel.stopPhoneSetup()
+        requestFocusAfterLayout(setupFocusRequester)
+    }
+    // App em segundo plano (Home) com o QR aberto: o servidor sai do ar.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.stopPhoneSetup()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(phoneSetup.error) {
+        val error = phoneSetup.error ?: return@LaunchedEffect
+        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+        viewModel.stopPhoneSetup()
+    }
     // A resposta mais nova fica em cima, logo abaixo do campo. Só rola quando chega uma nova, não
     // ao voltar dos detalhes.
     val newestTurnId = uiState.turns.lastOrNull()?.id
@@ -152,6 +185,7 @@ fun AiAssistantScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -188,11 +222,12 @@ fun AiAssistantScreen(
             )
         }
         if (!settings.isConfigured || editing) {
-            item(key = "ai_setup") {
+            item(key = "ai_setup_$setupGeneration") {
                 AiSetupCard(
                     settings = settings,
                     canCancel = settings.isConfigured,
                     firstFocusRequester = setupFocusRequester,
+                    onPhoneSetup = viewModel::startPhoneSetup,
                     onSave = { provider, apiKey, model ->
                         viewModel.saveSettings(provider, apiKey, model)
                         editing = false
@@ -233,6 +268,20 @@ fun AiAssistantScreen(
                 onNavigateToDetail = onNavigateToDetail,
             )
         }
+    }
+
+    if (phoneSetup.isActive) {
+        QrCodeOverlay(
+            qrBitmap = phoneSetup.qrCodeBitmap,
+            serverUrl = phoneSetup.serverUrl,
+            instruction = stringResource(R.string.ai_assistant_phone_instruction),
+            onClose = {
+                viewModel.stopPhoneSetup()
+                focusSoon(setupFocusRequester)
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
     }
 }
 
@@ -447,6 +496,7 @@ private fun AiSetupCard(
     settings: AiAssistantSettings,
     canCancel: Boolean,
     firstFocusRequester: FocusRequester,
+    onPhoneSetup: () -> Unit,
     onSave: (AiProvider, String, String) -> Unit,
     onCancel: () -> Unit,
     fetchModels: suspend (AiProvider, String) -> AiModelListResult,
@@ -504,6 +554,10 @@ private fun AiSetupCard(
             color = NuvioTheme.colors.TextSecondary,
             modifier = Modifier.padding(top = NuvioTheme.spacing.xs),
         )
+        Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
+        NuvioButton(onClick = onPhoneSetup) {
+            Text(stringResource(R.string.ai_assistant_phone_setup))
+        }
         Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
         AiModelPicker(
             provider = provider,
