@@ -126,16 +126,17 @@ fun AiAssistantScreen(
         coroutineScope.launch { requestFocusAfterLayout(requester) }
     }
 
-    fun submit(text: String) {
-        if (viewModel.send(text)) {
-            prompt = ""
-            keyboardController?.hide()
-            // A sugestão tocada sai da tela e o Enviar fica desativado: o foco vai para o microfone.
-            focusSoon(micFocusRequester)
-        }
+    fun submit(text: String): Boolean {
+        if (!viewModel.send(text)) return false
+        prompt = ""
+        keyboardController?.hide()
+        // A sugestão tocada sai da tela e o Enviar fica desativado: o foco vai para o microfone.
+        focusSoon(micFocusRequester)
+        return true
     }
 
-    val voice = rememberAiVoiceInput(onResult = { recognized -> submit(recognized) })
+    // Falado com outro pedido em andamento: o texto fica no campo para enviar depois, não se perde.
+    val voice = rememberAiVoiceInput(onResult = { recognized -> if (!submit(recognized)) prompt = recognized })
 
     LaunchedEffect(Unit) {
         if (restoreTurnId != null) return@LaunchedEffect // a linha do cartaz restaura o foco
@@ -747,7 +748,9 @@ private fun AiTurnItem(
 private suspend fun requestFocusAfterLayout(requester: FocusRequester) {
     repeat(5) {
         withFrameNanos { }
-        if (runCatching { requester.requestFocus() }.isSuccess) return
+        // Conforme a versão do Compose, um alvo ainda não composto lança exceção ou devolve false.
+        val outcome = runCatching { requester.requestFocus() as Any? }
+        if (outcome.isSuccess && outcome.getOrNull() != false) return
     }
 }
 
