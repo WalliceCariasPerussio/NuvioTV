@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: AI assistant opened from the Search input row (natural-language requests turned into TMDB titles). -->
+<resources>
+    <string name="ai_assistant_title">Assistant</string>
+    <string name="ai_assistant_open">Open the AI assistant</string>
+    <string name="ai_assistant_prompt_placeholder">Ask for something to watch…</string>
+    <string name="ai_assistant_send">Send</string>
+    <string name="ai_assistant_voice">Speak the request</string>
+    <string name="ai_assistant_voice_failed">Couldn\'t hear the request. Try again.</string>
+    <string name="ai_assistant_voice_permission">Allow the microphone to speak to the assistant.</string>
+    <string name="ai_assistant_setup_title">AI assistant</string>
+    <string name="ai_assistant_setup_message">Choose a provider and paste your API key. It stays on this TV and is used by every profile. Tip: the Google TV remote in the Google Home app lets you paste it from the phone.</string>
+    <string name="ai_assistant_free">free</string>
+    <string name="ai_assistant_key_label">API key</string>
+    <string name="ai_assistant_key_hint">Get a key at %1$s</string>
+    <string name="ai_assistant_model_title">Model</string>
+    <string name="ai_assistant_model_default">default</string>
+    <string name="ai_assistant_models_need_key">Paste the key to see every model your account can use.</string>
+    <string name="ai_assistant_models_loading">Loading models…</string>
+    <string name="ai_assistant_save">Save</string>
+    <string name="ai_assistant_cancel">Cancel</string>
+    <string name="ai_assistant_change">Change</string>
+    <string name="ai_assistant_new_chat">New chat</string>
+    <string name="ai_assistant_retry">Try again</string>
+    <string name="ai_assistant_thinking">Looking for titles…</string>
+    <string name="ai_assistant_results_title">Suggestions</string>
+    <string name="ai_assistant_none_found">None of these titles were found on TMDB.</string>
+    <string name="ai_assistant_some_missing">%1$d of the suggested titles were not found on TMDB.</string>
+    <string name="ai_assistant_empty_title">What do you want to watch?</string>
+    <string name="ai_assistant_empty_message">Describe it your way: genre, mood, length, or something similar to a title you liked.</string>
+    <string name="ai_assistant_suggestion_1">Horror anime</string>
+    <string name="ai_assistant_suggestion_2">A light movie for tonight</string>
+    <string name="ai_assistant_suggestion_3">Short thriller series</string>
+    <string name="ai_assistant_suggestion_4">Something like what I watched last</string>
+</resources>

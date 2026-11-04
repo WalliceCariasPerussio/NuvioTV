@@ -46,6 +46,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -138,7 +139,8 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
     onNavigateToDetail: (String, String, String) -> Unit,
     onNavigateToSeeAll: (catalogId: String, addonId: String, type: String) -> Unit = { _, _, _ -> },
-    onOpenDiscover: () -> Unit = {}
+    onOpenDiscover: () -> Unit = {},
+    onOpenAssistant: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val watchedMovieIds by viewModel.watchedMovieIds.collectAsState()
@@ -655,6 +657,7 @@ fun SearchScreen(
                         onOpenDiscover()
                     },
                     discoverFocusRequester = discoverButtonFocusRequester,
+                    onOpenAssistant = onOpenAssistant,
                     showDiscoverButton = uiState.discoverLocation == DiscoverLocation.IN_SEARCH,
                     keyboardController = keyboardController,
                     clearHistoryFocusRequester = if (showRecentSearches) recentClearHistoryFocusRequester else null,
@@ -1178,6 +1181,7 @@ private fun SearchInputField(
     onMoveToResults: () -> Unit,
     onOpenDiscover: () -> Unit,
     discoverFocusRequester: FocusRequester? = null,
+    onOpenAssistant: () -> Unit = {},
     showDiscoverButton: Boolean,
     keyboardController: androidx.compose.ui.platform.SoftwareKeyboardController?,
     clearHistoryFocusRequester: FocusRequester?,
@@ -1194,6 +1198,31 @@ private fun SearchInputField(
             .focusGroup(),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Fork: assistente de IA (pedido em linguagem natural vira cartazes do TMDB).
+        var isAssistantButtonFocused by remember { mutableStateOf(false) }
+        IconButton(
+            onClick = onOpenAssistant,
+            modifier = Modifier
+                .onFocusChanged { isAssistantButtonFocused = it.isFocused }
+                .size(NuvioTheme.spacing.huge)
+                .border(
+                    width = if (isAssistantButtonFocused) NuvioTheme.spacing.xxs else NuvioTheme.spacing.hairline,
+                    color = if (isAssistantButtonFocused) NuvioTheme.colors.FocusRing else NuvioTheme.colors.Border,
+                    shape = RoundedCornerShape(NuvioTheme.radii.md)
+                )
+                .background(
+                    color = NuvioTheme.colors.BackgroundCard,
+                    shape = RoundedCornerShape(NuvioTheme.radii.md)
+                )
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = stringResource(R.string.ai_assistant_open),
+                tint = NuvioTheme.colors.Secondary
+            )
+        }
+        Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
+
         if (showDiscoverButton) {
             IconButton(
                 onClick = onOpenDiscover,

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork: assistente de IA aberto pela linha do campo de busca (pedidos em linguagem natural viram títulos do TMDB). -->
+<resources>
+    <string name="ai_assistant_title">Assistente</string>
+    <string name="ai_assistant_open">Abrir o assistente com IA</string>
+    <string name="ai_assistant_prompt_placeholder">Peça algo para assistir…</string>
+    <string name="ai_assistant_send">Enviar</string>
+    <string name="ai_assistant_voice">Falar o pedido</string>
+    <string name="ai_assistant_voice_failed">Não deu para ouvir o pedido. Tente de novo.</string>
+    <string name="ai_assistant_voice_permission">Libere o microfone para falar com o assistente.</string>
+    <string name="ai_assistant_setup_title">Assistente com IA</string>
+    <string name="ai_assistant_setup_message">Escolha o provedor e cole a sua chave de API. Ela fica só nesta TV e vale para todos os perfis. Dica: o controle remoto do Google TV no app Google Home deixa colar a chave pelo celular.</string>
+    <string name="ai_assistant_free">grátis</string>
+    <string name="ai_assistant_key_label">Chave de API</string>
+    <string name="ai_assistant_key_hint">Pegue a chave em %1$s</string>
+    <string name="ai_assistant_model_title">Modelo</string>
+    <string name="ai_assistant_model_default">padrão</string>
+    <string name="ai_assistant_models_need_key">Cole a chave para ver todos os modelos que a sua conta pode usar.</string>
+    <string name="ai_assistant_models_loading">Carregando modelos…</string>
+    <string name="ai_assistant_save">Salvar</string>
+    <string name="ai_assistant_cancel">Cancelar</string>
+    <string name="ai_assistant_change">Alterar</string>
+    <string name="ai_assistant_new_chat">Nova conversa</string>
+    <string name="ai_assistant_retry">Tentar de novo</string>
+    <string name="ai_assistant_thinking">Procurando títulos…</string>
+    <string name="ai_assistant_results_title">Sugestões</string>
+    <string name="ai_assistant_none_found">Não achei esses títulos no TMDB.</string>
+    <string name="ai_assistant_some_missing">%1$d dos títulos sugeridos não foram achados no TMDB.</string>
+    <string name="ai_assistant_empty_title">O que você quer assistir?</string>
+    <string name="ai_assistant_empty_message">Descreva do seu jeito: gênero, clima, duração ou algo parecido com um título de que você gostou.</string>
+    <string name="ai_assistant_suggestion_1">Animes de terror</string>
+    <string name="ai_assistant_suggestion_2">Um filme leve para hoje</string>
+    <string name="ai_assistant_suggestion_3">Séries curtas de suspense</string>
+    <string name="ai_assistant_suggestion_4">Algo parecido com o que vi por último</string>
+</resources>

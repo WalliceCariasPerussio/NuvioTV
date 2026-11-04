@@ -1196,7 +1196,24 @@ private fun PlaybackNavHost(
                         Screen.CatalogSeeAll.createRoute(catalogId, addonId, type, fromSearch = true)
                     )
                 },
-                onOpenDiscover = { navController.navigate(Screen.Discover.route) }
+                onOpenDiscover = { navController.navigate(Screen.Discover.route) },
+                onOpenAssistant = { navController.navigate(Screen.AiAssistant.route) }
+            )
+        }
+
+        composable(Screen.AiAssistant.route) {
+            com.nuvio.tv.ui.screens.ai.AiAssistantScreen(
+                onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
+                    val heroBackdrop = HeroBackdropState.consumeAndClear()
+                    navController.navigate(
+                        Screen.Detail.createRoute(
+                            itemId = itemId,
+                            itemType = itemType,
+                            addonBaseUrl = addonBaseUrl,
+                            heroBackdropUrl = heroBackdrop
+                        )
+                    )
+                }
             )
         }
 
