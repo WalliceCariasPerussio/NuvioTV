@@ -108,6 +108,9 @@ fun AiAssistantScreen(
     var editing by rememberSaveable { mutableStateOf(false) }
     var prompt by rememberSaveable { mutableStateOf("") }
     val inputFocusRequester = remember { FocusRequester() }
+    // Alvo de foco que nunca sai da tela nem fica desativado depois de configurado, e que não abre o
+    // teclado como o campo de texto.
+    val micFocusRequester = remember { FocusRequester() }
     val setupFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -127,6 +130,8 @@ fun AiAssistantScreen(
         if (viewModel.send(text)) {
             prompt = ""
             keyboardController?.hide()
+            // A sugestão tocada sai da tela e o Enviar fica desativado: o foco vai para o microfone.
+            focusSoon(micFocusRequester)
         }
     }
 
@@ -134,7 +139,7 @@ fun AiAssistantScreen(
 
     LaunchedEffect(Unit) {
         if (restoreTurnId != null) return@LaunchedEffect // a linha do cartaz restaura o foco
-        requestFocusAfterLayout(if (settings.isConfigured) inputFocusRequester else setupFocusRequester)
+        requestFocusAfterLayout(if (settings.isConfigured) micFocusRequester else setupFocusRequester)
     }
     // A resposta mais nova fica em cima, logo abaixo do campo. Só rola quando chega uma nova, não
     // ao voltar dos detalhes.
@@ -164,7 +169,7 @@ fun AiAssistantScreen(
                 onNewChat = {
                     viewModel.clear()
                     restoreTurnId = null
-                    focusSoon(inputFocusRequester)
+                    focusSoon(micFocusRequester)
                 },
             )
         }
@@ -178,6 +183,7 @@ fun AiAssistantScreen(
                 onSubmit = { submit(prompt) },
                 onVoice = voice.start,
                 focusRequester = inputFocusRequester,
+                micFocusRequester = micFocusRequester,
             )
         }
         if (!settings.isConfigured || editing) {
@@ -189,11 +195,11 @@ fun AiAssistantScreen(
                     onSave = { provider, apiKey, model ->
                         viewModel.saveSettings(provider, apiKey, model)
                         editing = false
-                        focusSoon(inputFocusRequester)
+                        focusSoon(micFocusRequester)
                     },
                     onCancel = {
                         editing = false
-                        focusSoon(inputFocusRequester)
+                        focusSoon(micFocusRequester)
                     },
                     fetchModels = viewModel::fetchModels,
                 )
@@ -213,7 +219,7 @@ fun AiAssistantScreen(
                 restoreItemIndex = if (turn.id == restoreTurnId) restoreItemIndex else -1,
                 onRetry = {
                     viewModel.retry(turn.id)
-                    focusSoon(inputFocusRequester)
+                    focusSoon(micFocusRequester)
                 },
                 onItemOpened = { index ->
                     restoreTurnId = turn.id
@@ -286,6 +292,7 @@ private fun AiPromptRow(
     onSubmit: () -> Unit,
     onVoice: () -> Unit,
     focusRequester: FocusRequester,
+    micFocusRequester: FocusRequester,
 ) {
     val canSend = enabled && !busy && prompt.isNotBlank()
     Row(
@@ -294,10 +301,13 @@ private fun AiPromptRow(
             .padding(horizontal = NuvioTheme.spacing.xxxl),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Fica ativo mesmo ocupado ou escutando: desativar o botão focado tira o foco do D-pad.
+        // Apertar durante a escuta cancela; com um pedido em andamento, o envio só é recusado.
         AiSquareIconButton(
             onClick = onVoice,
-            enabled = enabled && !busy && !listening,
+            enabled = enabled,
             highlighted = listening,
+            modifier = Modifier.focusRequester(micFocusRequester),
         ) {
             Icon(
                 imageVector = Icons.Default.Mic,
@@ -350,6 +360,7 @@ private fun AiSquareIconButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     highlighted: Boolean = false,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -357,7 +368,7 @@ private fun AiSquareIconButton(
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
+        modifier = modifier
             .onFocusChanged { focused = it.isFocused }
             .size(NuvioTheme.spacing.huge)
             .border(
@@ -825,9 +836,15 @@ private fun rememberAiVoiceInput(onResult: (String) -> Unit): AiVoiceInput {
     return AiVoiceInput(
         listening = listening,
         start = {
-            val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
-            if (hasPermission) startListening() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            if (listening) {
+                // Segundo aperto durante a escuta: cancela.
+                recognizer?.cancel()
+                listening = false
+            } else {
+                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                    PackageManager.PERMISSION_GRANTED
+                if (hasPermission) startListening() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
         },
     )
 }
