@@ -17,7 +17,12 @@ import com.nuvio.tv.ui.components.posteroptions.buildCompletedMovieProgress
 import com.nuvio.tv.ui.components.posteroptions.toLibraryEntryInput
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -82,9 +87,17 @@ class AiAssistantActionRunner @Inject constructor(
                 error = context.getString(R.string.ai_assistant_action_error_no_episodes),
             )
         }
+        // Só o que falta: remarcar episódio visto troca a data dele e manda de novo para o Trakt
+        // (série vista pela metade, ou o mesmo pedido aprovado duas vezes).
+        val completed = completedEpisodes(listOf(item.id, original.id))
+        val missing = episodes.filterNot { video -> (video.season!! to video.episode!!) in completed }
+        if (missing.isEmpty()) {
+            watchedSeriesStateHolder.update(watchedSeriesStateHolder.fullyWatchedSeriesIds.value + item.id)
+            return AiActionOutcome(AiAssistantActionStatus.AlreadyDone)
+        }
         val now = System.currentTimeMillis()
         watchProgressRepository.markAsCompletedBatch(
-            episodes.map { video ->
+            missing.map { video ->
                 WatchProgress(
                     contentId = item.id,
                     contentType = item.apiType,
@@ -104,14 +117,41 @@ class AiAssistantActionRunner @Inject constructor(
             },
         )
         watchedSeriesStateHolder.update(watchedSeriesStateHolder.fullyWatchedSeriesIds.value + item.id)
-        return AiActionOutcome(AiAssistantActionStatus.Done, episodeCount = episodes.size)
+        return AiActionOutcome(AiAssistantActionStatus.Done, episodeCount = missing.size)
+    }
+
+    /**
+     * Episódios completos, juntando os dois ids do título (tt... e tmdb:N). Com Trakt ou Simkl a
+     * primeira emissão é um mapa vazio de propósito (onStart), antes da resposta do provedor: espera
+     * a segunda. Sem provedor, ou com a resposta igual à primeira, vale a primeira após o prazo.
+     */
+    private suspend fun completedEpisodes(ids: List<String>): Set<Pair<Int, Int>> = coroutineScope {
+        ids.distinct()
+            .map { id ->
+                async {
+                    val flow = watchProgressRepository.getAllEpisodeProgress(id)
+                    val progress = withTimeoutOrNull(EPISODE_PROGRESS_WAIT_MS) { flow.drop(1).first() }
+                        ?: flow.first()
+                    progress.filterValues { it.isCompleted() }.keys
+                }
+            }
+            .awaitAll()
+            .flatten()
+            .toSet()
     }
 
     private suspend fun addToLibrary(item: MetaPreview, original: MetaPreview): AiActionOutcome {
-        val alreadySaved = libraryRepository.isInLibrary(item.id, item.apiType).first() ||
+        val input = item.toLibraryEntryInput(addonBaseUrl = null)
+        // toggleDefault alterna pela situação que o provedor tem agora (getMembershipSnapshot), não pela
+        // projeção do isInLibrary, que pode estar vazia enquanto carrega: decidir pela mesma leitura
+        // garante que ele só pode adicionar, nunca tirar.
+        val alreadySaved = libraryRepository.getMembershipSnapshot(input).listMembership.values.any { it } ||
+            libraryRepository.isInLibrary(item.id, item.apiType).first() ||
             libraryRepository.isInLibrary(original.id, original.apiType).first()
         if (alreadySaved) return AiActionOutcome(AiAssistantActionStatus.AlreadyDone)
-        libraryRepository.toggleDefault(item.toLibraryEntryInput(addonBaseUrl = null))
+        val result = libraryRepository.toggleDefault(input)
+        // Pediria confirmação de remoção: nada foi feito.
+        if (result.requiresRemovalConfirmation) return AiActionOutcome(AiAssistantActionStatus.AlreadyDone)
         return AiActionOutcome(AiAssistantActionStatus.Done)
     }
 
@@ -141,5 +181,6 @@ class AiAssistantActionRunner @Inject constructor(
 
     private companion object {
         const val TAG = "AiAssistantActions"
+        const val EPISODE_PROGRESS_WAIT_MS = 6_000L
     }
 }
