@@ -46,4 +46,19 @@
     <string name="web_ai_error_empty">Cole a chave.</string>
     <string name="web_ai_error">Não deu para enviar. A TV ainda está mostrando o QR code?</string>
     <string name="web_ai_has_key">esta TV já tem uma chave deste provedor; salvar troca a atual.</string>
+    <string name="ai_assistant_actions_review">Confira e aprove</string>
+    <string name="ai_assistant_actions_title">Ações</string>
+    <string name="ai_assistant_approve">Aprovar</string>
+    <string name="ai_assistant_action_mark_watched">Marcar como assistido</string>
+    <string name="ai_assistant_action_add_library">Adicionar à biblioteca</string>
+    <string name="ai_assistant_action_whole_series">série inteira</string>
+    <string name="ai_assistant_action_status_pending">Aguardando</string>
+    <string name="ai_assistant_action_status_running">Fazendo…</string>
+    <string name="ai_assistant_action_status_done">Feito</string>
+    <string name="ai_assistant_action_status_done_episodes">Feito · %1$d episódios</string>
+    <string name="ai_assistant_action_status_already">Já estava</string>
+    <string name="ai_assistant_action_status_failed">Falhou: %1$s</string>
+    <string name="ai_assistant_action_status_cancelled">Cancelado</string>
+    <string name="ai_assistant_action_status_not_found">Não achei no TMDB</string>
+    <string name="ai_assistant_action_error_no_episodes">nenhum episódio encontrado</string>
 </resources>

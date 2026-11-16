@@ -54,6 +54,10 @@ class AiAssistantViewModel @Inject constructor(
 
     fun clear() = repository.clear()
 
+    fun approveActions(turnId: Long) = repository.approveActions(turnId)
+
+    fun cancelActions(turnId: Long) = repository.cancelActions(turnId)
+
     fun saveSettings(provider: AiProvider, apiKey: String, model: String) =
         settingsStore.save(provider, apiKey, model)
 

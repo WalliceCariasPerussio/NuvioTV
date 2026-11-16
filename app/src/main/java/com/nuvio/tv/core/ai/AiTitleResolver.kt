@@ -18,20 +18,31 @@ import java.net.URLEncoder
  * Transforma os títulos sugeridos pelo modelo em cartazes do TMDB, como os itens TMDB das coleções
  * (`tmdb:<id>`). Título que o TMDB não acha fica de fora.
  */
+internal data class AiResolvedTitle(
+    val suggested: AiSuggestedTitle,
+    val preview: MetaPreview,
+)
+
 internal object AiTitleResolver {
     private const val TAG = "AiTitleResolver"
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun resolve(titles: List<AiSuggestedTitle>, language: String): List<MetaPreview> = coroutineScope {
+    /** Cada título achado com o cartaz correspondente, na ordem do modelo e sem repetidos. */
+    suspend fun resolve(titles: List<AiSuggestedTitle>, language: String): List<AiResolvedTitle> = coroutineScope {
         val apiKey = BuildConfig.TMDB_API_KEY.takeIf(String::isNotBlank) ?: return@coroutineScope emptyList()
         val lang = language.ifBlank { "en" }
         titles
             .take(AiRecommendationPrompt.MAX_TITLES)
-            .map { title -> async { resolveOne(title, apiKey, lang) } }
+            .map { title -> async { resolveOne(title, apiKey, lang)?.let { AiResolvedTitle(title, it) } } }
             .awaitAll()
             .filterNotNull()
             // Filme e série do TMDB podem ter o mesmo número: o tipo faz parte da identidade.
-            .distinctBy { it.rawType to it.id }
+            .distinctBy { it.preview.rawType to it.preview.id }
+    }
+
+    suspend fun resolveTitle(title: AiSuggestedTitle, language: String): MetaPreview? {
+        val apiKey = BuildConfig.TMDB_API_KEY.takeIf(String::isNotBlank) ?: return null
+        return resolveOne(title, apiKey, language.ifBlank { "en" })
     }
 
     private suspend fun resolveOne(title: AiSuggestedTitle, apiKey: String, language: String): MetaPreview? {
@@ -153,7 +164,7 @@ internal fun <T> pickBestTmdbMatch(
     return exact.ifEmpty { top }.maxByOrNull(votes)
 }
 
-private fun String.normalizedTitle(): String =
+internal fun String.normalizedTitle(): String =
     lowercase().filter { it.isLetterOrDigit() }
 
 /**

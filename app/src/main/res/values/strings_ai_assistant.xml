@@ -46,4 +46,19 @@
     <string name="web_ai_error_empty">Paste the key.</string>
     <string name="web_ai_error">Could not send. Is the TV still showing the QR code?</string>
     <string name="web_ai_has_key">this TV already has a key for this provider; saving replaces it.</string>
+    <string name="ai_assistant_actions_review">Review and approve</string>
+    <string name="ai_assistant_actions_title">Actions</string>
+    <string name="ai_assistant_approve">Approve</string>
+    <string name="ai_assistant_action_mark_watched">Mark as watched</string>
+    <string name="ai_assistant_action_add_library">Add to library</string>
+    <string name="ai_assistant_action_whole_series">whole series</string>
+    <string name="ai_assistant_action_status_pending">Waiting</string>
+    <string name="ai_assistant_action_status_running">Working…</string>
+    <string name="ai_assistant_action_status_done">Done</string>
+    <string name="ai_assistant_action_status_done_episodes">Done · %1$d episodes</string>
+    <string name="ai_assistant_action_status_already">Already done</string>
+    <string name="ai_assistant_action_status_failed">Failed: %1$s</string>
+    <string name="ai_assistant_action_status_cancelled">Cancelled</string>
+    <string name="ai_assistant_action_status_not_found">Not found on TMDB</string>
+    <string name="ai_assistant_action_error_no_episodes">no episodes found</string>
 </resources>

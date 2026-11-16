@@ -532,7 +532,7 @@ class PosterOptionsController @Inject constructor(
     }
 }
 
-private fun buildCompletedMovieProgress(item: MetaPreview): WatchProgress {
+internal fun buildCompletedMovieProgress(item: MetaPreview): WatchProgress {
     return WatchProgress(
         contentId = item.id,
         contentType = item.apiType,
@@ -551,7 +551,7 @@ private fun buildCompletedMovieProgress(item: MetaPreview): WatchProgress {
     )
 }
 
-private fun MetaPreview.toLibraryEntryInput(addonBaseUrl: String?): LibraryEntryInput {
+internal fun MetaPreview.toLibraryEntryInput(addonBaseUrl: String?): LibraryEntryInput {
     val year = Regex("(\\d{4})").find(releaseInfo ?: "")
         ?.groupValues
         ?.getOrNull(1)

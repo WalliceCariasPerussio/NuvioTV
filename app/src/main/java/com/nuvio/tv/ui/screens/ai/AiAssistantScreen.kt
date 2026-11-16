@@ -37,7 +37,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -81,6 +83,9 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.ai.AiAssistantAction
+import com.nuvio.tv.core.ai.AiAssistantActionKind
+import com.nuvio.tv.core.ai.AiAssistantActionStatus
 import com.nuvio.tv.core.ai.AiAssistantSettings
 import com.nuvio.tv.core.ai.AiAssistantTurn
 import com.nuvio.tv.core.ai.AiAssistantTurnStatus
@@ -253,8 +258,19 @@ fun AiAssistantScreen(
             AiTurnItem(
                 turn = turn,
                 restoreItemIndex = if (turn.id == restoreTurnId) restoreItemIndex else -1,
+                // Resposta nova com ações: o foco vai para o Aprovar, a um OK de distância.
+                focusApprove = turn.id == newestTurnId,
                 onRetry = {
                     viewModel.retry(turn.id)
+                    focusSoon(micFocusRequester)
+                },
+                // Aprovar e Cancelar somem depois do clique: o foco volta para o microfone.
+                onApprove = {
+                    viewModel.approveActions(turn.id)
+                    focusSoon(micFocusRequester)
+                },
+                onCancelActions = {
+                    viewModel.cancelActions(turn.id)
                     focusSoon(micFocusRequester)
                 },
                 onItemOpened = { index ->
@@ -692,7 +708,10 @@ private fun AiEmptyState(onSuggestion: (String) -> Unit) {
 private fun AiTurnItem(
     turn: AiAssistantTurn,
     restoreItemIndex: Int,
+    focusApprove: Boolean,
     onRetry: () -> Unit,
+    onApprove: () -> Unit,
+    onCancelActions: () -> Unit,
     onItemOpened: (Int) -> Unit,
     onItemFocused: () -> Unit,
     onNavigateToDetail: (String, String, String) -> Unit,
@@ -748,6 +767,16 @@ private fun AiTurnItem(
                         modifier = textModifier,
                     )
                 }
+                if (turn.actions.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
+                    AiActionsCard(
+                        turn = turn,
+                        focusApprove = focusApprove,
+                        onApprove = onApprove,
+                        onCancel = onCancelActions,
+                        modifier = textModifier,
+                    )
+                }
                 if (turn.items.isNotEmpty()) {
                     val row = remember(turn.id, turn.items) {
                         CatalogRow(
@@ -792,6 +821,128 @@ private fun AiTurnItem(
                 }
             }
         }
+    }
+}
+
+/** Lista o que o modelo propôs fazer; nada acontece antes do OK em Aprovar. */
+@Composable
+private fun AiActionsCard(
+    turn: AiAssistantTurn,
+    focusApprove: Boolean,
+    onApprove: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pending = turn.hasPendingActions
+    val approveFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(turn.id, pending, focusApprove) {
+        if (pending && focusApprove) requestFocusAfterLayout(approveFocusRequester)
+    }
+    Column(
+        modifier = modifier
+            .widthIn(max = 900.dp)
+            .background(NuvioTheme.colors.BackgroundCard, RoundedCornerShape(NuvioTheme.radii.lg))
+            .padding(NuvioTheme.spacing.lg),
+    ) {
+        Text(
+            text = stringResource(if (pending) R.string.ai_assistant_actions_review else R.string.ai_assistant_actions_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioTheme.colors.TextPrimary,
+        )
+        Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
+        turn.actions.forEach { action ->
+            AiActionRow(action = action)
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
+        }
+        if (pending) {
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
+            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+                NuvioButton(
+                    onClick = onApprove,
+                    modifier = Modifier.focusRequester(approveFocusRequester),
+                ) {
+                    Text(stringResource(R.string.ai_assistant_approve))
+                }
+                NuvioButton(onClick = onCancel) {
+                    Text(stringResource(R.string.ai_assistant_cancel))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiActionRow(action: AiAssistantAction) {
+    val target = action.target
+    val title = if (target == null) {
+        action.requestedTitle
+    } else {
+        buildString {
+            append(target.name)
+            target.releaseInfo?.takeIf(String::isNotBlank)?.let { append(" (").append(it).append(')') }
+            val isSeries = target.apiType.equals("series", ignoreCase = true) ||
+                target.apiType.equals("tv", ignoreCase = true) ||
+                target.apiType.equals("anime", ignoreCase = true)
+            if (action.kind == AiAssistantActionKind.MarkWatched && isSeries) {
+                append(" · ").append(stringResource(R.string.ai_assistant_action_whole_series))
+            }
+        }
+    }
+    val statusText = when (action.status) {
+        AiAssistantActionStatus.Pending -> stringResource(R.string.ai_assistant_action_status_pending)
+        AiAssistantActionStatus.Running -> stringResource(R.string.ai_assistant_action_status_running)
+        AiAssistantActionStatus.Done -> action.episodeCount
+            ?.let { stringResource(R.string.ai_assistant_action_status_done_episodes, it) }
+            ?: stringResource(R.string.ai_assistant_action_status_done)
+        AiAssistantActionStatus.AlreadyDone -> stringResource(R.string.ai_assistant_action_status_already)
+        AiAssistantActionStatus.Failed -> stringResource(R.string.ai_assistant_action_status_failed, action.error.orEmpty())
+        AiAssistantActionStatus.Cancelled -> stringResource(R.string.ai_assistant_action_status_cancelled)
+        AiAssistantActionStatus.NotFound -> stringResource(R.string.ai_assistant_action_status_not_found)
+    }
+    val statusColor = when (action.status) {
+        AiAssistantActionStatus.Done, AiAssistantActionStatus.AlreadyDone -> NuvioTheme.colors.Primary
+        AiAssistantActionStatus.Failed, AiAssistantActionStatus.NotFound -> NuvioTheme.colors.Error
+        else -> NuvioTheme.colors.TextSecondary
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = when (action.kind) {
+                AiAssistantActionKind.MarkWatched -> Icons.Filled.CheckCircle
+                AiAssistantActionKind.AddToLibrary -> Icons.Filled.Add
+            },
+            contentDescription = null,
+            tint = NuvioTheme.colors.Primary,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(
+                    when (action.kind) {
+                        AiAssistantActionKind.MarkWatched -> R.string.ai_assistant_action_mark_watched
+                        AiAssistantActionKind.AddToLibrary -> R.string.ai_assistant_action_add_library
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = NuvioTheme.colors.TextSecondary,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
+        Text(
+            text = statusText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = statusColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 320.dp),
+        )
     }
 }
 
