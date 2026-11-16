@@ -103,6 +103,31 @@ internal fun PlayerRuntimeController.tryAutoSourceFailover(
     return errorMessage != null && !showSwitchToMpv && offerOtherSources(stalled = isStallMessage(errorMessage))
 }
 
+/** The count and the failed sources belong to one episode: another one starts them over. */
+private fun PlayerRuntimeController.startFailoverEpisode(episodeKey: String) {
+    val failover = sourceFailover
+    if (failover.episodeKey != episodeKey) {
+        failover.episodeKey = episodeKey
+        failover.failedKeys.clear()
+        failover.attempts = 0
+    }
+}
+
+/**
+ * [tryAutoSourceFailover] after the upstream fallback (PlayerRuntimeControllerSourceFallback.kt) gave
+ * up or did not apply: the sources that fallback already tried are left out, so they are not tried again.
+ */
+internal fun PlayerRuntimeController.tryAutoSourceFailoverAfterFallback(errorMessage: String): Boolean {
+    if (sourceFallbackTriedKeys.isNotEmpty()) {
+        startFailoverEpisode(currentEpisodeKey())
+        _uiState.value.sourceAllStreams
+            .filter { it.sourceFallbackKey() in sourceFallbackTriedKeys }
+            .mapNotNull { it.failoverKey() }
+            .forEach(sourceFailover.failedKeys::add)
+    }
+    return tryAutoSourceFailover(errorMessage)
+}
+
 private fun PlayerRuntimeController.tryAutoSourceSwitch(
     errorMessage: String?,
     showSwitchToMpv: Boolean,
@@ -119,11 +144,7 @@ private fun PlayerRuntimeController.tryAutoSourceSwitch(
     failover.cancel()
 
     val episodeKey = currentEpisodeKey()
-    if (failover.episodeKey != episodeKey) {
-        failover.episodeKey = episodeKey
-        failover.failedKeys.clear()
-        failover.attempts = 0
-    }
+    startFailoverEpisode(episodeKey)
     if (failover.manualStart || failover.manualPick?.let { state.isPlaying(it) } == true) return false
     if (failover.attempts >= MaxSourceFailovers) {
         // An error clip has no error screen of its own: show the sources instead.

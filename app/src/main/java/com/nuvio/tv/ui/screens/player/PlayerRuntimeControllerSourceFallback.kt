@@ -58,6 +58,8 @@ internal fun PlayerRuntimeController.restartSourceFallback(
 /** Shows [errorMessage] as the playback error unless the next matching source is tried instead. */
 internal fun PlayerRuntimeController.showErrorUnlessSourceFallback(errorMessage: String) {
     if (tryFallbackToNextSourceAfterError(errorMessage)) return
+    // Fork (PlayerSourceFailover.kt): another source, or the source list, before the error.
+    if (tryAutoSourceFailoverAfterFallback(errorMessage)) return
     _uiState.update {
         it.copy(
             error = errorMessage,
@@ -143,6 +145,9 @@ internal fun PlayerRuntimeController.tryFallbackToNextSourceAfterError(errorMess
 
         // The last source that failed may have been saved for reuse.
         streamCacheKey?.let { streamLinkCacheDataStore.remove(it) }
+        // Fork (PlayerSourceFailover.kt): no further source here, so the fork's switch and then the
+        // source list come before the error.
+        if (tryAutoSourceFailoverAfterFallback(errorMessage)) return@launch
         _uiState.update {
             it.copy(
                 error = errorMessage,
