@@ -159,6 +159,9 @@ class AddonEpisodeListService @Inject constructor(
                             .dropWhile { it is NetworkResult.Loading }
                             .firstOrNull()
                     }
+                } catch (e: CancellationException) {
+                    // Fork: the caller was cancelled (not a timeout, which gives null): stop here.
+                    throw e
                 } catch (_: Exception) {
                     null
                 } ?: continue
