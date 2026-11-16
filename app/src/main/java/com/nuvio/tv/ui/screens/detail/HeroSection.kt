@@ -72,12 +72,15 @@ import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MDBListRatings
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.NextToWatch
+import com.nuvio.tv.domain.model.isWatchedAsOneItem
 import com.nuvio.tv.ui.components.ImdbRatingSourceLabel
 import com.nuvio.tv.ui.components.MDBListRatingsRow
 import com.nuvio.tv.ui.components.SynopsisDescription
 import com.nuvio.tv.ui.theme.NuvioTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.ui.platform.LocalConfiguration
@@ -283,7 +286,7 @@ fun HeroContentSection(
                             onFocused = onHeroActionFocused
                         )
 
-                        if (meta.apiType == "movie") {
+                        if (meta.isWatchedAsOneItem()) {
                             ActionIconButton(
                                 icon = if (isMovieWatched) {
                                     Icons.Default.Visibility
@@ -315,10 +318,12 @@ fun HeroContentSection(
                         }
 
                         if (showRandomEpisodeButton) {
-                            ShuffleButton(
-                                active = episodeShuffle.enabled,
-                                pending = shuffleActionPending,
-                                onClick = onRandomEpisodeClick,
+                            ActionIconButton(
+                                icon = if (episodeShuffle.enabled) Icons.Default.Stop else Icons.Default.Shuffle,
+                                contentDescription = stringResource(
+                                    if (episodeShuffle.enabled) R.string.shuffle_stop else R.string.random_episode_title
+                                ),
+                                onClick = { if (!shuffleActionPending) onRandomEpisodeClick() },
                                 focusRequester = randomEpisodeFocusRequester,
                                 onFocused = onHeroActionFocused
                             )

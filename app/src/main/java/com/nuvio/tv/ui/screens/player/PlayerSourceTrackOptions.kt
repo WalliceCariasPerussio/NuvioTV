@@ -58,6 +58,8 @@ internal fun PlayerUiState.currentSourceStream(streams: List<Stream> = sourceAll
             currentStreamAddonName = currentStreamAddonName,
             currentStreamUrl = currentStreamUrl,
             currentStreamName = currentStreamName,
+            currentStreamDescription = currentStreamDescription,
+            currentFilename = null,
         )
     )
 

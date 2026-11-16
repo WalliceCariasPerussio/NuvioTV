@@ -437,7 +437,11 @@ private fun PlayerUiState.isPlaying(stream: Stream): Boolean =
         currentStreamFileIdx = currentStreamFileIdx,
         currentStreamAddonName = currentStreamAddonName,
         currentStreamUrl = currentStreamUrl,
-        currentStreamName = currentStreamName,
+        // One stream at a time, so the matcher's "only a single result" check on name and filename
+        // cannot hold: those two stay out.
+        currentStreamName = null,
+        currentStreamDescription = null,
+        currentFilename = null,
     ) == 0
 
 // A torrent is identified by its hash alone: the file index is not kept the same way everywhere.
